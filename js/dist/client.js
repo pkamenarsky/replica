@@ -260,7 +260,7 @@ function buildDOM(ws, dom, index, parent) {
 function connect() {
     let root = document.createElement('div');
     const port = window.location.port ? window.location.port : (window.location.protocol === 'http' ? 80 : 443);
-    const ws = new WebSocket(window.location.hostname + ":" + port);
+    const ws = new WebSocket("ws://" + window.location.hostname + ":" + port);
     document.documentElement.appendChild(root);
     ws.onmessage = (event) => {
         const update = JSON.parse(event.data);
