@@ -1,0 +1,68 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.1.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 2a4cdf96c9e605153e2afdfc59db390cd5f6021a04ee1b404461aec04349ac08
+
+name:           replica
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/githubuser/replica#readme>
+homepage:       https://github.com/https://github.com/pkamenarsky/replica#readme
+bug-reports:    https://github.com/https://github.com/pkamenarsky/replica/issues
+author:         Philip Kamenarsky
+maintainer:     p.kamenarsky@gmail.com
+copyright:      2019 (c) Philip Kamenarsky
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/https://github.com/pkamenarsky/replica
+
+library
+  exposed-modules:
+      Replica.DOM
+  other-modules:
+      Replica.Internal
+      Paths_replica
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -ferror-spans -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists
+  build-depends:
+      Diff
+    , aeson
+    , base >=4.7 && <5
+    , bytestring
+    , containers
+    , file-embed
+    , template-haskell
+    , text
+  default-language: Haskell2010
+
+test-suite replica-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_replica
+  hs-source-dirs:
+      test
+  ghc-options: -Wall -ferror-spans -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      Diff
+    , QuickCheck
+    , aeson
+    , base >=4.7 && <5
+    , bytestring
+    , containers
+    , file-embed
+    , quickcheck-instances
+    , replica
+    , template-haskell
+    , text
+  default-language: Haskell2010
