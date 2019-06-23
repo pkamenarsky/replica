@@ -29,10 +29,10 @@ t = id
 type HTML = [VDOM]
 
 data Attr
-  = AText T.Text
-  | ABool Bool
-  | AEvent (DOMEvent -> IO ())
-  | AMap Attrs
+  = AText  !T.Text
+  | ABool  !Bool
+  | AEvent !(DOMEvent -> IO ())
+  | AMap   !Attrs
 
 instance A.ToJSON Attr where
   toJSON (AText v) = A.String v
@@ -43,9 +43,9 @@ instance A.ToJSON Attr where
 type Attrs = M.Map T.Text Attr
 
 data AttrDiff
-  = DeleteKey T.Text
-  | InsertKey T.Text Attr
-  | DiffKey T.Text [KeyDiff]
+  = DeleteKey !T.Text
+  | InsertKey !T.Text !Attr
+  | DiffKey   !T.Text ![KeyDiff]
 
 instance A.ToJSON AttrDiff where
   toJSON (DeleteKey k) = A.object
@@ -64,8 +64,8 @@ instance A.ToJSON AttrDiff where
     ]
 
 data KeyDiff
-  = Replace Attr
-  | DiffMap [AttrDiff]
+  = Replace !Attr
+  | DiffMap ![AttrDiff]
 
 instance A.ToJSON KeyDiff where
   toJSON (Replace v) = A.object
@@ -143,10 +143,10 @@ instance A.ToJSON VDOM where
     ]
 
 data Diff
-  = Delete Int
-  | Insert Int VDOM
-  | Diff Int [AttrDiff] [Diff]
-  | ReplaceText Int T.Text
+  = Delete !Int
+  | Insert !Int !VDOM
+  | Diff !Int ![AttrDiff] ![Diff]
+  | ReplaceText !Int !T.Text
 
 instance A.ToJSON Diff where
   toJSON (Delete i) = A.object
