@@ -386,8 +386,10 @@ function buildDOM(ws: WebSocket, dom: DOM, index: number | null, parent: Element
   return element as any;
 }
 
-function connect(port: number) {
+function connect() {
   let root = document.createElement('div');
+
+  const port = window.location.port ? window.location.port : (window.location.protocol === 'http' ? 80 : 443);
   const ws = new WebSocket(window.location.hostname + ":" + port);
 
   document.documentElement.appendChild(root);
@@ -421,3 +423,5 @@ function connect(port: number) {
     }
   };
 }
+
+connect();

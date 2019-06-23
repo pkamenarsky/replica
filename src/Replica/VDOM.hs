@@ -256,26 +256,18 @@ fireEvent ds (x:xs) = if x < length ds
       else \_ _ -> pure ()
     fireEventOnNode _ _                         = \_ _ -> pure ()
 
-clientDriver :: Int -> B.ByteString
-clientDriver port
-  = $(FE.embedFile "js/dist/client.js")
- <> "\n"
- <> "connect(" <> BC.pack (show port) <> ");"
+clientDriver :: B.ByteString
+clientDriver = $(FE.embedFile "js/dist/client.js")
 
 stagedIndex :: B.ByteString
 stagedIndex = $(lift
     $ replace "<script src=\"dist/client.js\"></script>"
         ("<script language=\"javascript\">\n"
         <> $(FE.embedFile "js/dist/client.js")
-        <> "\n"
-        <> "connect($PORT);"
-        <> "\n"
         <> "</script>"
         )
     $(FE.embedFile "js/index.html")
   )
 
-index :: Int -> B.ByteString -> B.ByteString
-index port title
-  = replace "$TITLE" title
-  $ replace "$PORT" (BC.pack $ show port) $ stagedIndex
+index :: B.ByteString -> B.ByteString
+index title = replace "$TITLE" title $ stagedIndex

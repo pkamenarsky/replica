@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c204c677620d53a1b7eed24202ba240bfa03e73d87eafce2e9e1a304e160b645
+-- hash: 9160ee1ac83c3f9ccf4b993f35dca621a8d07555c2af141f61853d1ba4ad7819
 
 name:           replica
 version:        0.1.0.0
@@ -28,6 +28,7 @@ source-repository head
 library
   exposed-modules:
       Replica.VDOM
+      Network.Wai.Handler.Replica
   other-modules:
       Replica.Internal
       Paths_replica
@@ -41,8 +42,12 @@ library
     , bytestring
     , containers
     , file-embed
+    , http-types
     , template-haskell
     , text
+    , wai
+    , wai-websockets
+    , websockets
   default-language: Haskell2010
 
 test-suite replica-test
@@ -61,8 +66,12 @@ test-suite replica-test
     , bytestring
     , containers
     , file-embed
+    , http-types
     , quickcheck-instances
     , replica
     , template-haskell
     , text
+    , wai
+    , wai-websockets
+    , websockets
   default-language: Haskell2010

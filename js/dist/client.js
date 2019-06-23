@@ -257,8 +257,9 @@ function buildDOM(ws, dom, index, parent) {
     }
     return element;
 }
-function connect(port) {
+function connect() {
     let root = document.createElement('div');
+    const port = window.location.port ? window.location.port : (window.location.protocol === 'http' ? 80 : 443);
     const ws = new WebSocket(window.location.hostname + ":" + port);
     document.documentElement.appendChild(root);
     ws.onmessage = (event) => {
@@ -284,3 +285,4 @@ function connect(port) {
         }
     };
 }
+connect();

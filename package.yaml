@@ -26,13 +26,18 @@ dependencies:
 - containers
 - file-embed
 - Diff
+- http-types
 - template-haskell
 - text
+- wai
+- websockets
+- wai-websockets
 
 library:
   source-dirs: src
   exposed-modules:
   - Replica.VDOM
+  - Network.Wai.Handler.Replica
   ghc-options:
   - -Wall
   - -ferror-spans
