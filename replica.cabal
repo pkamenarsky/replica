@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2a4cdf96c9e605153e2afdfc59db390cd5f6021a04ee1b404461aec04349ac08
+-- hash: c204c677620d53a1b7eed24202ba240bfa03e73d87eafce2e9e1a304e160b645
 
 name:           replica
 version:        0.1.0.0
@@ -27,7 +27,7 @@ source-repository head
 
 library
   exposed-modules:
-      Replica.DOM
+      Replica.VDOM
   other-modules:
       Replica.Internal
       Paths_replica
@@ -52,7 +52,7 @@ test-suite replica-test
       Paths_replica
   hs-source-dirs:
       test
-  ghc-options: -Wall -ferror-spans -Wincomplete-uni-patterns -Wincomplete-record-updates -Wmissing-import-lists -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Diff
     , QuickCheck

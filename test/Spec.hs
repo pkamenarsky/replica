@@ -8,7 +8,7 @@ import qualified Data.Text as T
 import           Test.QuickCheck
 import           Test.QuickCheck.Instances
 
-import           Replica.DOM
+import           Replica.VDOM
 
 instance Arbitrary Attr where
   arbitrary = do

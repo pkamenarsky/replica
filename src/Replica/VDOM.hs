@@ -6,7 +6,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell     #-}
 
-module Replica.DOM where
+module Replica.VDOM where
 
 import           Data.Aeson                 ((.=))
 import qualified Data.Aeson                 as A
