@@ -11,7 +11,6 @@ module Replica.VDOM where
 import           Data.Aeson                 ((.=))
 import qualified Data.Aeson                 as A
 import qualified Data.ByteString            as B
-import qualified Data.ByteString.Char8      as BC
 import qualified Data.FileEmbed             as FE
 import           Data.Monoid                ((<>))
 import qualified Data.Text                  as T

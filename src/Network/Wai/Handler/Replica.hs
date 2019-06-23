@@ -3,25 +3,25 @@
 
 module Network.Wai.Handler.Replica where
 
-import Control.Concurrent
-import           Control.Monad
+import           Control.Concurrent             (Chan, forkIO, newChan, readChan, writeChan)
+import           Control.Monad                  (forever, void)
 
-import           Data.Aeson             ((.:), (.=))
-import qualified Data.Aeson               as A
+import           Data.Aeson                     ((.:), (.=))
+import qualified Data.Aeson                     as A
 
-import Data.ByteString as B
-import Data.ByteString.Lazy as BL
-import qualified Data.Text                as T
-import Network.HTTP.Types
+import qualified Data.ByteString                as B
+import qualified Data.ByteString.Lazy           as BL
+import qualified Data.Text                      as T
+import           Network.HTTP.Types             (status200)
 
-import Network.WebSockets
-import Network.WebSockets.Connection
-import Network.Wai
-import Network.Wai.Handler.WebSockets
+import           Network.WebSockets             (ServerApp)
+import           Network.WebSockets.Connection  (ConnectionOptions, Connection, acceptRequest, forkPingThread, receiveData, sendTextData)
+import           Network.Wai                    (Application, responseLBS)
+import           Network.Wai.Handler.WebSockets (websocketsOr)
 
-import qualified Replica.VDOM as V
+import qualified Replica.VDOM                   as V
 
-import Debug.Trace
+import           Debug.Trace                    (traceIO)
 
 data Event = Event
   { evtType        :: T.Text
