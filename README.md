@@ -14,15 +14,31 @@ See [list of **Replica** frameworks](#list-of-replica-frameworks).
 
 SPAs written in frameworks such as [React](https://reactjs.org) or [Vue](https://vuejs.org) oftentimes require setting up projects in different languages with their respective build tooling, thinking about protocols between server and client, designing data types for communication (whether explicitly or implicitly) and coming up with a way to keeping everything in sync reliably. More often than not this results in copious amounts of boilerplate and support code completely unrelated to the task at hand.
 
-A change on the backend has to be propagated through the server code and protocol or API long before the affected UI components can be adjusted. Conversely, a specification or requirements change in the UI depend upon long-winded thought experiments in data flow before the required modifications on the backend can be pinned down. Prototyping speed grinds to a halt and maintenance costs skyrocket.
-
-There is also the additional burden of thinking about security – a simple `select * from users` would also send the (hopefully) hashed user passwords back to the client, even though they are not displayed anywhere in the UI. Thinking hard about scrubbing sensitive data before throwing something over the wire is laborious and error prone and humans make mistakes.
+A change on the backend has to be propagated through the server code and protocol or API long before the affected UI components can be adjusted. Conversely, a specification or requirements change in the UI depend upon long-winded thought experiments in data flow before the required modifications on the backend can be pinned down. Prototyping speed slows down and maintenance costs go up.
 
 And so, one often finds oneself longing for the Olden Days of server side HTML rendering, where all the data was readily available at one's fingertips without protocols or different ecosystems to be taken care of. However, one then loses out on designing UIs declaratively in the spirit of [Elm](https://elm-lang.org) or [React](https://reactjs.org) and of course on the interactivity offered by code running directly on the client side.
+
+### Remote virtual DOM
 
 **Replica** seeks the middle ground – it runs a virtual DOM *remotely on the server* while pushing only minimal diffs to the client, which in turn sends events triggered by the user back to the backend. This offers all of the advantages of generating a complete UI on the server, while still providing the interactivity of more traditional SPAs running entirely on the client.
 
 A word about data volume – currently, the data format is not optimised for size at all; that said, it should be comparable to a finely hand-tuned protocol, since only the most minimal changeset is sent over the wire (save for a small-ish volume constant because of the ceremony caused by the recursive tree nature of the data). In contrast, many APIs are constructed to send the whole requested dataset on every change, so **Replica**'s diffs might fare favourably here. Furthermore, designing a protocol with minimal data volumes in mind would on the other hand probably also increase the volume of the aforementioned incidental boilerplate and support code.
+
+### Preventing common errors
+
+There is also the additional burden of thinking about sensitive data – a simple `select * from users` would also send the (hopefully) hashed user passwords back to the client, even though they are not displayed anywhere in the UI. Thinking hard about scrubbing records before throwing something over the wire is laborious and error prone and humans make mistakes.
+
+With a remote VDOM, *all code* runs on the backend – no need to come up with ways to share functionality between server and client, to validate forms twice or authenticate API requests.
+
+That is not to say **Replica** itself (or its programming model) is more secure than any other program exposed to a network, but a certain class of common errors stemming from the split between back- and frontend are presumably more difficult to make.
+
+### Bundle sizes
+
+Megabyte-sized code bundles including hundreds of dependencies certainly can take a bit to download, but then there's also parsing, which can be even slower. With a remote VDOM, *no code at all* is shipped to the client (except for the JS driver), only diffs and assets like CSS, images, or fonts. Although there's no support for server-side HTML rendering yet, once implemented it will be just as easy to push everything at once (without having to wait for the driver to establish a WebSocket connection first and request an initial DOM update), reducing the time to first render even further.
+
+### Testing
+
+Since there is no dependency on a browser environment, simulating UI interactions is just a matter of getting hold of the VDOM and firing a synthesized event on a particular node. QuickChecking components or even [metamorphic testing](http://www.lsi.us.es/~segura/files/papers/segura17-tse.pdf) are certainly some interesting avenues to explore in the context of UI testing.
 
 ## Client side prediction
 
@@ -74,6 +90,7 @@ For finer grained integration, there's `Network.Wai.Handler.Replica.websocketApp
 * Lifecycle events and animation hooks
 * `onMouseDrag` event
 * Nix derivation
+* QuickCheck component framework
 
 ## Bugs and features
 
