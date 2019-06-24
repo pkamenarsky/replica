@@ -1,0 +1,26 @@
+version: 2
+jobs:
+  build-8.6.4:
+    docker:
+      - image: fpco/stack-build:lts-13.19
+
+    working_directory: /home/stackage
+
+    steps:
+      - checkout
+      - restore_cache:
+          key: v1-cache-8.6.4-stack-work-{{checksum "stack.yaml"}}-{{checksum "package.yaml"}}
+      - run: stack setup
+      - run: stack install --test
+      - save_cache:
+          key: v1-cache-8.6.4-stack-work-{{checksum "stack.yaml"}}-{{checksum "package.yaml"}}
+          paths:
+            - /root/.stack
+            - /home/stackage/.stack-work
+      - store_test_results:
+          path: /home/stackage/.stack-work/logs
+workflows:
+  version: 2
+  build-and-deploy:
+    jobs:
+      - build-8.6.4
