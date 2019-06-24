@@ -26,11 +26,11 @@ A word about data volume – currently, the data format is not optimised for siz
 
 ## Client side prediction
 
-**Replica** runs over a WebSocket connection. A virtual DOM wired up with events which might lead to change needs to react to every such event – be it a mouse click or a key stroke. Normally, even on an average connection, some lag between a click on a button and showing the updated UI is fine; not so when it comes to typing. Even a lag of ~50ms starts to be noticeable, since the DOM is a complete and accurate representation of the UI displayed to the user and the values of text input elements need to be replicated as well.
+**Replica** runs over a WebSocket connection. A virtual DOM wired up with events which might lead to change needs to react to every such event – be it a mouse click or a key stroke. Normally, even on an average connection, some lag between a click on a button and showing the updated UI is fine; not so when it comes to typing. Even a lag of ~50ms starts to be noticeable, since the virtual DOM is a complete and accurate representation of the UI displayed to the user and the values of text input elements need to be replicated as well.
 
 Game developers have had to deal with the problem of client side prediction at least since the days of Quake and so the solution space is well understood. **Replica**, for the time being, offers a simple implementaion – every event → DOM patch roundtrip increases a frame number on the server and every such patch is tagged with said frame number. Additionally, every input element wired with an event listener keeps its value in a capped queue in the browser DOM for a given number of frames (currently 20). Finally, when the DOM is patched, the input value is not touched iff the server value matches any of the previous frame values stored on the client.
 
-Even with a simple scheme like this the user experience is indistinguishable from code running directly on the client, for the majority of cases, for even higher lag values of ~100ms - 200ms. *Rare* edge cases show, but those can be mitigated in the future by employing more sophisticated client side prediction algorithms.
+Even with a simple scheme like this the user experience is indistinguishable from code running directly on the client, for the majority of cases, for even higher lag values of ~100ms - 200ms. *Rare* edge cases show, but those can be mitigated against in the future by employing more sophisticated client side prediction algorithms.
 
 ## Caveats
 
