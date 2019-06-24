@@ -4,11 +4,11 @@
 
 **Replica** is a *remote virtual DOM* library for Haskell. In contrast to traditional virtual DOM implementations, a remote virtual DOM runs *on the server* and is replicated to the client, which just acts as a dumb terminal.
 
-[`concur-replica`](https://github.com/pkamenarsky/concur-replica) is a **Replica** backend for [Concur](https://github.com/ajnsit/concur), "an unusual Web UI Framework for Haskell".
+See [list of **Replica** frameworks](list-of-replica-frameworks).
 
 ## Motivation
 
-SPAs written in frameworks such as [React](https://reactjs.org) or [Vue](https://vuejs.org) oftentimes require setting up different projects in different languages with their respective build tooling, thinking about protocols between server and client, designing data types for communication (whether explicitly or implicitly) and coming up with a way to keeping everything in sync reliably. More often than not this results in copious amounts of boilerplate and support code completely unrelated to the task at hand.
+SPAs written in frameworks such as [React](https://reactjs.org) or [Vue](https://vuejs.org) oftentimes require setting up projects in different languages with their respective build tooling, thinking about protocols between server and client, designing data types for communication (whether explicitly or implicitly) and coming up with a way to keeping everything in sync reliably. More often than not this results in copious amounts of boilerplate and support code completely unrelated to the task at hand.
 
 A change on the backend has to be propagated through the server code and protocol or API long before the affected UI components can be adjusted. Conversely, a specification or requirements change in the UI depend upon long-winded thought experiments in data flow before the required modifications on the backend can be pinned down. Prototyping speed grinds to a halt and maintenance costs skyrocket.
 
@@ -36,11 +36,22 @@ Additionally, events such as `onMouseMove` are discouraged, although they are su
 
 There's no support for animations and lifecycle events yet, however the implementation would be relatively straightforward.
 
+## Building
+
+Install [TypeScript](https://www.typescriptlang.org) and [Stack](https://docs.haskellstack.org/en/stable/README). Then:
+
+```
+cd js && tsc --project tsconfig.json && cd ..
+stack build --test
+```
+
+The TypeScript step must be executed whenever `js/client.ts` changes.
+
 ## Integration with UI frameworks
 
-**Replica** aims to be framework agnostic. It offers a simple API and hooking into it should be relatively straightforward. That said, feedback on the API is very much welcome.
+**Replica** aims to be framework agnostic. It offers a simple API and hooking into it should be as uncomplicated as possible. That said, feedback is very much welcome.
 
-## List of frameworks with **Replica** integration
+## List of **Replica** frameworks
 
 * [`concur-replica`](https://github.com/pkamenarsky/concur-replica)
 
