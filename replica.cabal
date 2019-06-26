@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 9160ee1ac83c3f9ccf4b993f35dca621a8d07555c2af141f61853d1ba4ad7819
+-- hash: 837eb217a328b4e4fa7690c5ff80158247d4b647b5d2372a52747f288965aff2
 
 name:           replica
 version:        0.1.0.0
@@ -43,6 +43,7 @@ library
     , containers
     , file-embed
     , http-types
+    , stm
     , template-haskell
     , text
     , wai
@@ -69,6 +70,7 @@ test-suite replica-test
     , http-types
     , quickcheck-instances
     , replica
+    , stm
     , template-haskell
     , text
     , wai

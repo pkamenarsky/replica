@@ -3,7 +3,8 @@
 
 module Network.Wai.Handler.Replica where
 
-import           Control.Concurrent             (Chan, forkIO, newChan, readChan, writeChan)
+import           Control.Concurrent             -- (Chan, forkIO, newChan, readChan, writeChan)
+import           Control.Concurrent.STM
 import           Control.Monad                  (forever, void)
 
 import           Data.Aeson                     ((.:), (.=))
@@ -101,3 +102,62 @@ websocketApp initial step pendingConn = do
           newSt <- await event
     
           go conn chan (Just newDom) newSt (serverFrame + 1) (evtClientFrame event)
+
+app' :: forall st.
+     B.ByteString
+  -> ConnectionOptions
+  -> st
+  -> (st -> IO (Maybe (V.HTML, st, Event -> IO ())))
+  -> Application
+app' title options initial step
+  = websocketsOr options (websocketApp' initial step) backupApp
+  where
+    indexBS = BL.fromStrict $ V.index title
+
+    backupApp :: Application
+    backupApp _ respond = respond $ responseLBS status200 [] indexBS
+
+websocketApp' :: forall st.
+     st
+  -> (st -> IO (Maybe (V.HTML, st, Event -> IO ())))
+  -> ServerApp
+websocketApp' initial step pendingConn = do
+  conn <- acceptRequest pendingConn
+  chan <- newTVarIO Nothing
+  cf   <- newTVarIO 0
+
+  forkPingThread conn 30
+    
+  _ <- forkIO $ forever $ do
+    msg  <- receiveData conn
+    fire <- atomically $ do
+      fire <- readTVar chan
+      case (fire, A.decode msg) of
+        (Just fire', Just msg') -> do
+          writeTVar chan Nothing
+          writeTVar cf (evtClientFrame msg')
+          pure $ Right (fire' msg')
+        (_, Nothing) -> pure $ Left msg
+        (Nothing, _) -> retry
+
+    case fire of
+      Right io -> io
+      Left e   -> traceIO $ "Couldn't decode event: " <> show e
+
+  void $ go conn chan cf Nothing initial 0
+
+  where
+    go :: Connection -> TVar (Maybe (Event -> IO ())) -> TVar Int -> Maybe V.HTML -> st -> Int -> IO ()
+    go conn chan cf oldDom st serverFrame = do
+      r <- step st
+      case r of
+        Nothing -> pure ()
+        Just (newDom, next, fire) -> do
+          clientFrame <- readTVarIO cf
+          case oldDom of
+            Nothing -> sendTextData conn $ A.encode $ ReplaceDOM newDom
+            Just oldDom' -> sendTextData conn $ A.encode $ UpdateDOM serverFrame clientFrame (V.diff oldDom' newDom)
+          
+          atomically $ writeTVar chan (Just fire)
+    
+          go conn chan cf (Just newDom) next (serverFrame + 1)

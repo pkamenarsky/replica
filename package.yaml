@@ -28,6 +28,7 @@ dependencies:
 - Diff
 - http-types
 - template-haskell
+- stm
 - text
 - wai
 - websockets
