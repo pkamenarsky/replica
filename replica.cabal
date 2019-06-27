@@ -4,11 +4,13 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 837eb217a328b4e4fa7690c5ff80158247d4b647b5d2372a52747f288965aff2
+-- hash: f2504ec72f312ce7f740c31ead2f1af5147a03046283a1f454d92c320eb0cb48
 
 name:           replica
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/githubuser/replica#readme>
+synopsis:       Remote virtual DOM library
+description:    Please see the README on GitHub at <https://github.com/pkamenarsky/replica#readme>
+category:       Web
 homepage:       https://github.com/https://github.com/pkamenarsky/replica#readme
 bug-reports:    https://github.com/https://github.com/pkamenarsky/replica/issues
 author:         Philip Kamenarsky
@@ -43,7 +45,6 @@ library
     , containers
     , file-embed
     , http-types
-    , stm
     , template-haskell
     , text
     , wai
@@ -70,7 +71,6 @@ test-suite replica-test
     , http-types
     , quickcheck-instances
     , replica
-    , stm
     , template-haskell
     , text
     , wai
