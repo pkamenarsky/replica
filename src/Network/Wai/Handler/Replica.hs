@@ -3,9 +3,9 @@
 
 module Network.Wai.Handler.Replica where
 
-import           Control.Concurrent             -- (Chan, forkIO, newChan, readChan, writeChan)
-import           Control.Concurrent.STM
-import           Control.Monad                  (join, forever, void)
+import           Control.Concurrent             (forkIO, killThread)
+import           Control.Concurrent.STM         (TVar, atomically, newTVarIO, readTVar, writeTVar, retry)
+import           Control.Monad                  (join, forever)
 
 import           Data.Aeson                     ((.:), (.=))
 import qualified Data.Aeson                     as A
@@ -59,7 +59,7 @@ app :: forall st.
      B.ByteString
   -> ConnectionOptions
   -> st
-  -> (st -> IO (Maybe (V.HTML, Event -> IO st)))
+  -> (st -> IO (Maybe (V.HTML, st, Event -> IO ())))
   -> Application
 app title options initial step
   = websocketsOr options (websocketApp initial step) backupApp
@@ -71,57 +71,9 @@ app title options initial step
 
 websocketApp :: forall st.
      st
-  -> (st -> IO (Maybe (V.HTML, Event -> IO st)))
+  -> (st -> IO (Maybe (V.HTML, st, Event -> IO ())))
   -> ServerApp
 websocketApp initial step pendingConn = do
-  conn <- acceptRequest pendingConn
-  chan <- newChan
-
-  forkPingThread conn 30
-    
-  _ <- forkIO $ forever $ do
-    msg <- receiveData conn
-    case A.decode msg of
-      Just e  -> writeChan chan e
-      Nothing -> traceIO $ "Couldn't decode event: " <> show msg
-
-  void $ go conn chan Nothing initial 0 0
-
-  where
-    go :: Connection -> Chan Event -> Maybe V.HTML -> st -> Int -> Int -> IO ()
-    go conn chan oldDom st serverFrame clientFrame = do
-      r <- step st
-      case r of
-        Nothing -> pure ()
-        Just (newDom, await) -> do
-          case oldDom of
-            Nothing -> sendTextData conn $ A.encode $ ReplaceDOM newDom
-            Just oldDom' -> sendTextData conn $ A.encode $ UpdateDOM serverFrame clientFrame (V.diff oldDom' newDom)
-          
-          event <- readChan chan
-          newSt <- await event
-    
-          go conn chan (Just newDom) newSt (serverFrame + 1) (evtClientFrame event)
-
-app' :: forall st.
-     B.ByteString
-  -> ConnectionOptions
-  -> st
-  -> (st -> IO (Maybe (V.HTML, st, Event -> IO ())))
-  -> Application
-app' title options initial step
-  = websocketsOr options (websocketApp' initial step) backupApp
-  where
-    indexBS = BL.fromStrict $ V.index title
-
-    backupApp :: Application
-    backupApp _ respond = respond $ responseLBS status200 [] indexBS
-
-websocketApp' :: forall st.
-     st
-  -> (st -> IO (Maybe (V.HTML, st, Event -> IO ())))
-  -> ServerApp
-websocketApp' initial step pendingConn = do
   conn <- acceptRequest pendingConn
   chan <- newTVarIO Nothing
   cf   <- newTVarIO Nothing
