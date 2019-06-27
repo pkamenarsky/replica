@@ -256,16 +256,16 @@ fireEvent ds (x:xs) = if x < length ds
     fireEventOnNode _ _                         = \_ _ -> pure ()
 
 clientDriver :: B.ByteString
-clientDriver = $(FE.embedFile "js/dist/client.js")
+clientDriver = $(FE.embedFile "./js/dist/client.js")
 
 stagedIndex :: B.ByteString
 stagedIndex = $(lift
     $ replace "<script src=\"dist/client.js\"></script>"
         ("<script language=\"javascript\">\n"
-        <> $(FE.embedFile "js/dist/client.js")
+        <> $(FE.embedFile "./js/dist/client.js")
         <> "</script>"
         )
-    $(FE.embedFile "js/index.html")
+    $(FE.embedFile "./js/index.html")
   )
 
 index :: B.ByteString -> B.ByteString
