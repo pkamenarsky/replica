@@ -16,7 +16,7 @@ SPAs written in frameworks such as [React](https://reactjs.org) or [Vue](https:/
 
 A change on the backend has to be propagated through the server code and protocol or API long before the affected UI components can be adjusted. Conversely, a specification or requirements change in the UI depend upon long-winded thought experiments in data flow before the required modifications on the backend can be pinned down. Prototyping speed slows down and maintenance costs go up.
 
-And so, one often finds oneself longing for the Olden Days of server side HTML rendering, where all the data was readily available at one's fingertips without protocols or different ecosystems to be taken care of. However, one then loses out on designing UIs declaratively in the spirit of [Elm](https://elm-lang.org) or [React](https://reactjs.org) and of course on the interactivity offered by code running directly on the client side.
+And so, one often finds oneself longing for the Olden Days of server side HTML rendering, where all the data was readily available at our fingertips without protocols or different ecosystems to be taken care of. However, losing out on designing UIs declaratively in the spirit of [Elm](https://elm-lang.org) or [React](https://reactjs.org) and of course on the interactivity displayed by code running directly on the client side would be too high a price to pay.
 
 ### Remote virtual DOM
 
@@ -34,7 +34,7 @@ That is not to say **Replica** itself (or its programming model) is more secure 
 
 ### Bundle sizes
 
-Megabyte-sized code bundles including hundreds of dependencies certainly can take a bit to download, but then there's also parsing, which can be even slower. With a remote VDOM, *no code at all* is shipped to the client (except for the JS driver), only diffs and assets like CSS, images, or fonts. Although there's no support for server-side HTML rendering yet, once implemented it will be just as easy to push everything at once (without having to wait for the driver to establish a WebSocket connection first and request an initial DOM update), reducing the time to first render even further.
+Megabyte-sized code bundles including hundreds of dependencies can certainly take a bit to download, however parsing and compiling JavaScript is often just as slow. With a remote VDOM, *no code at all* is shipped to the client (except for the JS driver), only diffs and assets like CSS, images, or fonts. Although there's no support for server-side HTML rendering yet, once implemented it will be just as easy to push everything at once (without having to wait for the driver to establish a WebSocket connection and request an initial DOM update), reducing the time to first render even further.
 
 ### Testing
 
@@ -44,7 +44,7 @@ Since there is no dependency on a browser environment, simulating UI interaction
 
 **Replica** runs over a WebSocket connection. A virtual DOM wired up with events which might lead to change needs to react to every such event – be it a mouse click or a key stroke. Normally, even on an average connection, some lag between a click on a button and showing the updated UI is fine; not so when it comes to typing. Even a lag of ~50ms starts to be noticeable, since the virtual DOM is a complete and accurate representation of the UI displayed to the user and the values of text input elements need to be replicated as well.
 
-Game developers have had to deal with the problem of client side prediction at least since the days of Quake and so the solution space is well understood. **Replica**, for the time being, offers a simple implementaion – every event → DOM patch roundtrip increases a frame number on the server and every such patch is tagged with said frame number. Additionally, every input element wired with an event listener keeps its value in a capped queue in the browser DOM for a given number of frames (currently 20). Finally, when the DOM is patched, the input value is not touched iff the server value matches any of the previous frame values stored on the client.
+Game developers have had to deal with the problem of client side prediction at least since the days of Quake and so the solution space is well understood. For the time being, **Replica**'s algorithm is simple – every event → DOM patch roundtrip increases a frame number on the server and every such patch is tagged with said frame number. Additionally, every input element wired with an event listener keeps its value in a capped queue in the browser DOM for a given number of frames (currently 20). Finally, when the DOM is patched, the input value is not touched iff the server value matches any of the previous frame values stored on the client.
 
 Even with a simple scheme like this the user experience is indistinguishable from code running directly on the client, for the majority of cases, for even higher lag values of ~100ms - 200ms. *Rare* edge cases show, but those can be mitigated against in the future by employing more sophisticated client side prediction algorithms.
 
@@ -69,7 +69,7 @@ The TypeScript step must be executed whenever `js/client.ts` changes.
 
 ## Integration with UI frameworks
 
-**Replica** aims to be framework agnostic. It offers a simple API and hooking into it should be as uncomplicated as possible. That said, feedback is very much welcome.
+**Replica** aims to be framework agnostic. It has a simple API and hooking into it should be as uncomplicated as possible. That said, feedback is very much welcome.
 
 The easiest way to run **Replica** is to call `Network.Wai.Handler.Replica.app`. This takes care of distributing a complete `index.html` together with the Javascript driver to the client. Everything should work out of the box.
 
