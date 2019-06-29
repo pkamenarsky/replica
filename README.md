@@ -10,7 +10,7 @@
 
 ## Quick start
 
-To see **Replica** in action, check out the [list of **Replica** frameworks](#list-of-replica-frameworks)
+To see it in action, check out the [list of **Replica** frameworks](#list-of-replica-frameworks)
 
 ## Motivation
 
