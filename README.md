@@ -18,13 +18,13 @@ SPAs written in frameworks such as [React](https://reactjs.org) or [Vue](https:/
 
 A change on the backend has to be propagated through the server code and protocol or API long before the affected UI components can be adjusted. Conversely, changes in the UI specification or requirements depend upon long-winded thought experiments in data flow before the required modifications on the backend can be pinned down. Prototyping speed slows down and maintenance costs go up.
 
-And so, one often finds oneself longing for the Olden Days of server-side HTML rendering, where all the data was readily available at our fingertips without protocols or different ecosystems to deal with. However, this comes at the cost of losing out on designing UIs declaratively in the spirit of [Elm](https://elm-lang.org) or [React](https://reactjs.org) and of course on the interactivity displayed by code running directly on the client side, which more often than not would be too high a price to pay.
+And so, one often finds oneself longing for the Olden Days of server-side HTML rendering, where all the data was readily available at our fingertips without protocols or different ecosystems to deal with. However, this comes at the cost of losing out on designing UIs declaratively in the spirit of [Elm](https://elm-lang.org) or [React](https://reactjs.org) and of course on the interactivity displayed by code running directly on the client side.
 
 ### Remote virtual DOM
 
 **Replica** seeks the middle ground – it runs a virtual DOM *remotely on the server* while pushing only minimal diffs to the client, which in turn sends events triggered by the user back to the backend. This offers all the advantages of generating a complete UI on the server, while still providing the interactivity of more traditional SPAs running entirely on the client.
 
-A word about data volume – currently, the data format is not optimised for size at all; that said, it should be comparable to a finely hand-tuned protocol, since only the most minimal changeset is sent over the wire (save for a small-ish constant overhead because of the ceremony caused by the recursive tree nature of the data). In contrast, many APIs are constructed to send the whole requested dataset on every change, so **Replica**'s diffs might fare favourably here. Designing a protocol with minimal data volumes in mind is however also very likely to increase the volume of the aforementioned incidental boilerplate and support code.
+A word about data volume – currently, the data format is not optimised for size at all; that said, it should be comparable to a finely hand-tuned protocol, since only the most minimal changeset is sent over the wire (save for a small-ish constant overhead because of the ceremony caused by the recursive tree nature of the data). In contrast, many APIs are constructed to send the whole requested dataset on every change, so **Replica**'s diffs might fare favourably here. To that point, designing a protocol with minimal data volumes in mind is however also very likely to increase the volume of the aforementioned incidental boilerplate and support code.
 
 ### Preventing common errors
 
