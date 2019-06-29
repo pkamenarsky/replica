@@ -155,7 +155,7 @@ function getElementIndex(el: any): number {
 function getElementPath(el: Element): number[] {
   const path = [];
 
-  while (el !== document.documentElement) {
+  while (el !== document.body) {
     path.unshift(getElementIndex(el));
     el = (el as any).parentElement;
   }
@@ -392,7 +392,7 @@ function connect() {
   const port = window.location.port ? window.location.port : (window.location.protocol === 'http' ? 80 : 443);
   const ws = new WebSocket("ws://" + window.location.hostname + ":" + port);
 
-  document.documentElement.appendChild(root);
+  document.body.appendChild(root);
 
   ws.onmessage = (event) => {
     const update: Update = JSON.parse(event.data);
@@ -400,9 +400,9 @@ function connect() {
     switch (update.type) {
       case 'replace':
         if (root !== null) {
-          document.documentElement.removeChild(root);
+          document.body.removeChild(root);
           root = document.createElement('div');
-          document.documentElement.appendChild(root);
+          document.body.appendChild(root);
         }
 
         for (const element of update.dom) {
