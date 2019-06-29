@@ -67,7 +67,7 @@ app title options initial step
     indexBS = BL.fromStrict $ V.index title
 
     backupApp :: Application
-    backupApp _ respond = respond $ responseLBS status200 [] indexBS
+    backupApp _ respond = respond $ responseLBS status200 [("content-type", "text/html")] indexBS
 
 websocketApp :: forall st.
      st
