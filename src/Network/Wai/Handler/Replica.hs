@@ -57,14 +57,15 @@ instance A.ToJSON Update where
 
 app :: forall st.
      B.ByteString
+  -> V.HTML
   -> ConnectionOptions
   -> st
   -> (st -> IO (Maybe (V.HTML, st, Event -> IO ())))
   -> Application
-app title options initial step
+app title header options initial step
   = websocketsOr options (websocketApp initial step) backupApp
   where
-    indexBS = BL.fromStrict $ V.index title
+    indexBS = BL.fromStrict $ V.index title header
 
     backupApp :: Application
     backupApp _ respond = respond $ responseLBS status200 [("content-type", "text/html")] indexBS
@@ -79,7 +80,7 @@ websocketApp initial step pendingConn = do
   cf   <- newTVarIO Nothing
 
   forkPingThread conn 30
-    
+
   tid <- forkIO $ forever $ do
     msg  <- receiveData conn
     case A.decode msg of
@@ -113,7 +114,7 @@ websocketApp initial step pendingConn = do
           case oldDom of
             Nothing      -> sendTextData conn $ A.encode $ ReplaceDOM newDom
             Just oldDom' -> sendTextData conn $ A.encode $ UpdateDOM serverFrame clientFrame (V.diff oldDom' newDom)
-          
+
           atomically $ writeTVar chan (Just fire)
-    
+
           go conn chan cf (Just newDom) next (serverFrame + 1)

@@ -14,6 +14,9 @@ import qualified Data.ByteString            as B
 import qualified Data.FileEmbed             as FE
 import           Data.Monoid                ((<>))
 import qualified Data.Text                  as T
+import qualified Data.Text.Encoding         as T
+import qualified Data.Text.Lazy             as TL
+import qualified Data.Text.Lazy.Builder     as TB
 
 import qualified Data.Map                   as M
 
@@ -75,6 +78,34 @@ instance A.ToJSON KeyDiff where
     [ "type" .= t "diff"
     , "diff" .= ds
     ]
+
+renderAttrs :: Attrs -> TB.Builder
+renderAttrs = foldMap (TB.singleton ' ' <>) . _renderAttrs
+  where
+    dq = TB.singleton '"'
+    eq = TB.singleton '='
+
+    _renderAttrs :: Attrs -> [TB.Builder]
+    _renderAttrs = foldMap (uncurry _renderAttr) . M.toList
+
+    _renderAttr :: T.Text -> Attr -> [TB.Builder]
+    _renderAttr name value = case value of
+      AText txt   -> [TB.fromText name <> eq <> dq <> renderEscapedString txt <> dq]
+      ABool True  -> [TB.fromText name]
+      ABool False -> []
+      AEvent _    -> []
+      AMap attrs  -> _renderAttrs attrs
+
+renderEscapedString :: T.Text -> TB.Builder
+renderEscapedString = TB.fromText . T.concatMap escape
+  where
+    escape :: Char -> T.Text
+    escape '<'  = "&lt;"
+    escape '>'  = "&gt;"
+    escape '&'  = "&amp;"
+    escape '"'  = "&quot;"
+    escape '\'' = "&#39;"
+    escape c    = T.singleton c
 
 diffAttrs :: Attrs -> Attrs -> [AttrDiff]
 diffAttrs a b
@@ -141,6 +172,22 @@ instance A.ToJSON VDOM where
     , "children" .= children
     ]
 
+renderVDOM :: VDOM -> TB.Builder
+renderVDOM vdom = case vdom of
+  VNode name attrs children -> mconcat
+    [ tag $ TB.fromText name <> renderAttrs attrs
+    , mconcat $ map renderVDOM children
+    , tag $ sl <> TB.fromText name
+    ]
+  VLeaf name attrs          -> tag $ TB.fromText name <> renderAttrs attrs
+  VText txt                 -> renderEscapedString txt
+  where
+    tag a = TB.singleton '<' <> a <> TB.singleton '>'
+    sl = TB.singleton '/'
+
+renderHTML :: HTML -> TB.Builder
+renderHTML = mconcat . map renderVDOM
+
 data Diff
   = Delete !Int
   | Insert !Int !VDOM
@@ -178,11 +225,11 @@ diff a b = concatMap (uncurry toDiff) (zip vdiffs is)
 
     vdiffs = D.getDiffBy eqNode a b
     is     = go 0 vdiffs
-    
+
     toDiff :: D.Diff VDOM -> Int -> [Diff]
     toDiff (D.First _) i  = [Delete i]
     toDiff (D.Second v) i = [Insert i v]
-    toDiff (D.Both (VNode _ ca c) (VNode _ da d)) i    
+    toDiff (D.Both (VNode _ ca c) (VNode _ da d)) i
       | null das && null ds = []
       | otherwise           = [Diff i (diffAttrs ca da) (diff c d)]
       where
@@ -268,5 +315,10 @@ stagedIndex = $(lift
     $(FE.embedFile "./js/index.html")
   )
 
-index :: B.ByteString -> B.ByteString
-index title = replace "$TITLE" title $ stagedIndex
+index :: B.ByteString -> HTML -> B.ByteString
+index title header =
+  replace "<!-- HEADER -->" (htmlToBS header)
+  $ replace "$TITLE" title
+  $ stagedIndex
+  where
+    htmlToBS = T.encodeUtf8 . TL.toStrict . TB.toLazyText . renderHTML
