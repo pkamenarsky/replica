@@ -6,6 +6,7 @@ module Network.Wai.Handler.Replica where
 import           Control.Concurrent             (forkIO, killThread)
 import           Control.Concurrent.STM         (TVar, atomically, newTVarIO, readTVar, writeTVar, retry)
 import           Control.Monad                  (join, forever)
+import           Control.Exception              (onException)
 
 import           Data.Aeson                     ((.:), (.=))
 import qualified Data.Aeson                     as A
@@ -16,7 +17,7 @@ import qualified Data.Text                      as T
 import           Network.HTTP.Types             (status200)
 
 import           Network.WebSockets             (ServerApp)
-import           Network.WebSockets.Connection  (ConnectionOptions, Connection, acceptRequest, forkPingThread, receiveData, sendTextData)
+import           Network.WebSockets.Connection  (ConnectionOptions, Connection, acceptRequest, forkPingThread, receiveData, sendTextData, sendClose, sendCloseCode)
 import           Network.Wai                    (Application, responseLBS)
 import           Network.Wai.Handler.WebSockets (websocketsOr)
 
@@ -96,10 +97,14 @@ websocketApp initial step pendingConn = do
       Nothing -> traceIO $ "Couldn't decode event: " <> show msg
 
   go conn chan cf Nothing initial 0
+    `onException` sendCloseCode conn closeCodeInternalError ("internal error" :: T.Text)
+  sendClose conn ("done" :: T.Text)
 
   killThread tid
 
   where
+    closeCodeInternalError = 1011
+
     go :: Connection -> TVar (Maybe (Event -> IO ())) -> TVar (Maybe Int) -> Maybe V.HTML -> st -> Int -> IO ()
     go conn chan cf oldDom st serverFrame = do
       r <- step st

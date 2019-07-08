@@ -232,7 +232,7 @@ function setAttribute(ws: WebSocket, element: any, onProp: boolean, attr: string
         // [delet   ]       'dele'           'dele'           // user types 't'
         // [delet   ]       'delet'          'dele'           // 'delet' received on server
         // [delet   ]       'delet'          'delet'          // 'delet' synced to client
-        
+
         // [delete  ]       'delet'          'delet'          // user types 'e'
         // [delete1 ]       'delet'          'delet'          // user types '1'
         // [delete12]       'delet'          'delet'          // user types '2'
@@ -257,7 +257,7 @@ function setAttribute(ws: WebSocket, element: any, onProp: boolean, attr: string
         // - Anatoly Dyatlov, deputy chief-engineer of the Chernobyl Nuclear Power Plant
 
         const frameData = clientFrame !== null ? getFrame(element, attr, clientFrame) : [];
-        
+
         if (!frameData.includes(value)) {
           element.value = value;
           clearFrames(element, attr);
@@ -342,7 +342,7 @@ function patchAttribute(ws: WebSocket, element: any, onProp: boolean, adiff: Att
       }
   }
 }
- 
+
 function buildDOM(ws: WebSocket, dom: DOM, index: number | null, parent: Element): Element {
   let element = null;
 
@@ -386,6 +386,12 @@ function buildDOM(ws: WebSocket, dom: DOM, index: number | null, parent: Element
   return element as any;
 }
 
+// Reference:
+// https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent
+// https://tools.ietf.org/html/rfc6455#section-7.4
+const CLOSE_CODE_NORMAL_CLOSURE = 1000
+const CLOSE_CODE_INTERNAL_ERROR = 1011
+
 function connect() {
   let root = document.createElement('div');
 
@@ -420,6 +426,20 @@ function connect() {
         }
 
         break;
+    }
+  };
+
+  ws.onclose = (event) => {
+    switch (event.code) {
+      case CLOSE_CODE_NORMAL_CLOSURE:
+        // Server-side gracefully ended.
+        break;
+      case CLOSE_CODE_INTERNAL_ERROR:
+        // Error occured on server-side.
+        alert("Error occured. Please reload the page.");
+        break;
+      default:
+        // Other reasons. Some of them could be worth trying re-connecting.
     }
   };
 }
