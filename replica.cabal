@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.31.1.
+-- This file has been generated from package.yaml by hpack version 0.31.2.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: cb2b162b08a61164536382d1e17cead30ae541cb6a26da09dc1bb4553cea09b9
+-- hash: 2cb6969e4b4996324fd136649ddc2f15a844ec8a54c47bb22e685ab52269ccf7
 
 name:           replica
 version:        0.1.0.0
@@ -33,6 +33,9 @@ library
       Network.Wai.Handler.Replica
   other-modules:
       Replica.Internal
+      Replica.VDOM.Diff
+      Replica.VDOM.Render
+      Replica.VDOM.Types
       Paths_replica
   hs-source-dirs:
       src
