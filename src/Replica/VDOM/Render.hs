@@ -7,7 +7,7 @@ import qualified Data.Text                  as T
 import qualified Data.Text.Lazy.Builder     as TB
 import qualified Data.Map                   as M
 
-import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText), Attrs, Attr(AText,ABool,AEvent,AMap))
+import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawText), Attrs, Attr(AText,ABool,AEvent,AMap))
 
 renderHTML :: HTML -> TB.Builder
 renderHTML = mconcat . map renderVDOM
@@ -21,6 +21,7 @@ renderVDOM vdom = case vdom of
     ]
   VLeaf name attrs          -> tag $ TB.fromText name <> renderAttrs attrs
   VText txt                 -> renderEscapedString txt
+  VRawText txt              -> TB.fromText txt
   where
     tag a = TB.singleton '<' <> a <> TB.singleton '>'
     sl = TB.singleton '/'

@@ -8,7 +8,7 @@ import           Data.Monoid                ((<>))
 import qualified Data.Text                  as T
 import qualified Data.Map                   as M
 import qualified Data.Algorithm.Diff        as D
-import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText), Attrs, Attr(AText,ABool,AEvent,AMap))
+import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawText), Attrs, Attr(AText,ABool,AEvent,AMap))
 
 t :: T.Text -> T.Text
 t = id
@@ -103,6 +103,9 @@ diff a b = concatMap (uncurry toDiff) (zip vdiffs is)
     toDiff (D.Both (VText m) (VText n)) i
       | m == n    = []
       | otherwise = [ReplaceText i n]
+    toDiff (D.Both (VRawText m) (VRawText n)) i
+      | m == n    = []
+      | otherwise = [ReplaceText i n]
     toDiff _ _ = []
 
     key attrs = M.lookup "key" attrs
@@ -122,6 +125,7 @@ diff a b = concatMap (uncurry toDiff) (zip vdiffs is)
       , Just (AText k2) <- key ma = k1 == k2
       | otherwise = n == m && M.lookup "type" na `eqType` M.lookup "type" ma
     eqNode (VText _) (VText _) = True
+    eqNode (VRawText _) (VRawText _) = True
     eqNode _ _ = False
 
 diffAttrs :: Attrs -> Attrs -> [AttrDiff]
@@ -166,11 +170,13 @@ patch (Diff i ads ds:rds) a = patch rds $ take i a <> [v] <> drop (i + 1) a
       VNode e as cs -> VNode e (patchAttrs ads as) (patch ds cs)
       VLeaf e as    -> VLeaf e (patchAttrs ads as)
       VText _       -> error "Can't node patch text"
+      VRawText _    -> error "Can't node patch text"
 patch (ReplaceText i n:rds) a = patch rds $ take i a <> [v] <> drop (i + 1) a
   where
     v = case a !! i of
-      VText _ -> VText n
-      _       -> error "Can't text patch node"
+      VText _     -> VText n
+      VRawText _  -> VRawText n
+      _           -> error "Can't text patch node"
 
 patchAttrs :: [AttrDiff] -> Attrs -> Attrs
 patchAttrs [] a                 = a

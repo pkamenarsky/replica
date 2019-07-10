@@ -13,12 +13,17 @@ t = id
 type HTML = [VDOM]
 
 data VDOM
-  = VNode !T.Text !Attrs ![VDOM]
-  | VLeaf !T.Text !Attrs
-  | VText !T.Text
+  = VNode    !T.Text !Attrs ![VDOM]
+  | VLeaf    !T.Text !Attrs
+  | VText    !T.Text
+  | VRawText !T.Text
 
 instance A.ToJSON VDOM where
   toJSON (VText text) = A.object
+    [ "type" .= t "text"
+    , "text" .= text
+    ]
+  toJSON (VRawText text) = A.object
     [ "type" .= t "text"
     , "text" .= text
     ]

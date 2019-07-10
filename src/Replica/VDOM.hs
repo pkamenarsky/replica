@@ -18,14 +18,9 @@ import qualified Data.FileEmbed             as FE
 import           Data.Monoid                ((<>))
 import qualified Data.Text                  as T
 import qualified Data.Text.Encoding         as T
-import qualified Data.Text.Lazy             as TL
-import qualified Data.Text.Lazy.Builder     as TB
 import qualified Data.Map                   as M
 
-import           Language.Haskell.TH.Syntax (lift)
-import           Replica.Internal           (replace)
-
-import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText), Attrs, Attr(AText,ABool,AEvent,AMap), DOMEvent)
+import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawText), Attrs, Attr(AText,ABool,AEvent,AMap), DOMEvent)
 import           Replica.VDOM.Diff          (Diff, AttrDiff, diff, patch, diffAttrs, patchAttrs)
 import           Replica.VDOM.Render        (renderHTML)
 
@@ -55,20 +50,17 @@ fireEvent ds (x:xs) = if x < length ds
 clientDriver :: B.ByteString
 clientDriver = $(FE.embedFile "./js/dist/client.js")
 
-stagedIndex :: B.ByteString
-stagedIndex = $(lift
-    $ replace "<script src=\"dist/client.js\"></script>"
-        ("<script language=\"javascript\">\n"
-        <> $(FE.embedFile "./js/dist/client.js")
-        <> "</script>"
-        )
-    $(FE.embedFile "./js/index.html")
-  )
-
-index :: B.ByteString -> HTML -> B.ByteString
-index title header =
-  replace "<!-- HEADER -->" (htmlToBS header)
-  $ replace "$TITLE" title
-  $ stagedIndex
+defaultIndex :: T.Text -> HTML -> HTML
+defaultIndex title header =
+  [ VLeaf "meta" (fl [("charset", AText "utf-8")])
+  , VLeaf "!doctype" (fl [("html", ABool True)])
+  , VNode "html" mempty
+      [ VNode "head" mempty ([VNode "title" mempty [VText title]] <> header)
+      , VNode "body" mempty
+          [ VNode "script" (fl [("language", AText "javascript")])
+              [ VRawText $ T.decodeUtf8 clientDriver ]
+          ]
+      ]
+  ]
   where
-    htmlToBS = T.encodeUtf8 . TL.toStrict . TB.toLazyText . renderHTML
+    fl = M.fromList
