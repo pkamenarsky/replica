@@ -10,9 +10,11 @@ import           Control.Monad                  (join, forever)
 import           Data.Aeson                     ((.:), (.=))
 import qualified Data.Aeson                     as A
 
-import qualified Data.ByteString                as B
 import qualified Data.ByteString.Lazy           as BL
 import qualified Data.Text                      as T
+import qualified Data.Text.Encoding             as TE
+import qualified Data.Text.Lazy                 as TL
+import qualified Data.Text.Lazy.Builder         as TB
 import           Network.HTTP.Types             (status200)
 
 import           Network.WebSockets             (ServerApp)
@@ -21,6 +23,7 @@ import           Network.Wai                    (Application, responseLBS)
 import           Network.Wai.Handler.WebSockets (websocketsOr)
 
 import qualified Replica.VDOM                   as V
+import qualified Replica.VDOM.Render            as R
 
 import           Debug.Trace                    (traceIO)
 
@@ -56,15 +59,15 @@ instance A.ToJSON Update where
     ]
 
 app :: forall st.
-     B.ByteString
+     V.HTML
   -> ConnectionOptions
   -> st
   -> (st -> IO (Maybe (V.HTML, st, Event -> IO ())))
   -> Application
-app title options initial step
+app index options initial step
   = websocketsOr options (websocketApp initial step) backupApp
   where
-    indexBS = BL.fromStrict $ V.index title
+    indexBS = BL.fromStrict $ TE.encodeUtf8 $ TL.toStrict $ TB.toLazyText $ R.renderHTML index
 
     backupApp :: Application
     backupApp _ respond = respond $ responseLBS status200 [("content-type", "text/html")] indexBS
@@ -79,7 +82,7 @@ websocketApp initial step pendingConn = do
   cf   <- newTVarIO Nothing
 
   forkPingThread conn 30
-    
+
   tid <- forkIO $ forever $ do
     msg  <- receiveData conn
     case A.decode msg of
@@ -113,7 +116,7 @@ websocketApp initial step pendingConn = do
           case oldDom of
             Nothing      -> sendTextData conn $ A.encode $ ReplaceDOM newDom
             Just oldDom' -> sendTextData conn $ A.encode $ UpdateDOM serverFrame clientFrame (V.diff oldDom' newDom)
-          
+
           atomically $ writeTVar chan (Just fire)
-    
+
           go conn chan cf (Just newDom) next (serverFrame + 1)

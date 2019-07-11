@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: cb2b162b08a61164536382d1e17cead30ae541cb6a26da09dc1bb4553cea09b9
+-- hash: 934c3c818dc54dc66c2f0d09adbc567a3dfdf1eb37bee17e74f6c89b5d672e8c
 
 name:           replica
 version:        0.1.0.0
@@ -30,9 +30,11 @@ source-repository head
 library
   exposed-modules:
       Replica.VDOM
+      Replica.VDOM.Diff
+      Replica.VDOM.Types
+      Replica.VDOM.Render
       Network.Wai.Handler.Replica
   other-modules:
-      Replica.Internal
       Paths_replica
   hs-source-dirs:
       src
