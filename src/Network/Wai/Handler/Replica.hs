@@ -10,7 +10,6 @@ import           Control.Monad                  (join, forever)
 import           Data.Aeson                     ((.:), (.=))
 import qualified Data.Aeson                     as A
 
-import qualified Data.ByteString                as B
 import qualified Data.ByteString.Lazy           as BL
 import qualified Data.Text                      as T
 import qualified Data.Text.Encoding             as TE
