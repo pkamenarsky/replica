@@ -11,9 +11,11 @@ import           Control.Exception              (onException)
 import           Data.Aeson                     ((.:), (.=))
 import qualified Data.Aeson                     as A
 
-import qualified Data.ByteString                as B
 import qualified Data.ByteString.Lazy           as BL
 import qualified Data.Text                      as T
+import qualified Data.Text.Encoding             as TE
+import qualified Data.Text.Lazy                 as TL
+import qualified Data.Text.Lazy.Builder         as TB
 import           Network.HTTP.Types             (status200)
 
 import           Network.WebSockets             (ServerApp)
@@ -22,6 +24,7 @@ import           Network.Wai                    (Application, responseLBS)
 import           Network.Wai.Handler.WebSockets (websocketsOr)
 
 import qualified Replica.VDOM                   as V
+import qualified Replica.VDOM.Render            as R
 
 import           Debug.Trace                    (traceIO)
 
@@ -57,16 +60,15 @@ instance A.ToJSON Update where
     ]
 
 app :: forall st.
-     B.ByteString
-  -> V.HTML
+     V.HTML
   -> ConnectionOptions
   -> st
   -> (st -> IO (Maybe (V.HTML, st, Event -> IO ())))
   -> Application
-app title header options initial step
+app index options initial step
   = websocketsOr options (websocketApp initial step) backupApp
   where
-    indexBS = BL.fromStrict $ V.index title header
+    indexBS = BL.fromStrict $ TE.encodeUtf8 $ TL.toStrict $ TB.toLazyText $ R.renderHTML index
 
     backupApp :: Application
     backupApp _ respond = respond $ responseLBS status200 [("content-type", "text/html")] indexBS
