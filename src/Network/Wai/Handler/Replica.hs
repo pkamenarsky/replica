@@ -5,7 +5,7 @@ module Network.Wai.Handler.Replica where
 
 import           Control.Concurrent             (forkIO, killThread)
 import           Control.Concurrent.STM         (TVar, atomically, newTVarIO, readTVar, writeTVar, retry)
-import           Control.Monad                  (join, forever)
+import           Control.Monad                  (join, forever, void)
 
 import           Data.Aeson                     ((.:), (.=))
 import qualified Data.Aeson                     as A
@@ -101,7 +101,46 @@ websocketApp initial step pendingConn = do
 
   killThread tid
 
+  -- TODO: !!
+  run conn
+
   where
+    -- More clear version
+    -- change
+    --    * We should distinguish *frame* and *frame ID*.
+    --    * special treat the *first step*. We'll need to do this for SSR(server-side rendering)
+    --
+    -- minor changes
+    --    * whenJust
+    --    *
+    --
+    run :: Connection -> IO ()
+    run conn = do
+      r <- step initial
+      whenJust_ r $ \(vdom, st, fire) -> runLoop conn (ReplaceDOM vdom) vdom st fire 1
+
+    runLoop :: Connection -> Update -> V.HTML -> st -> (Event -> IO ()) -> Int -> IO ()
+    runLoop conn update vdom st fire frameId = do
+
+      -- 1. Show frame(#id = frameId) to user
+      sendTextData conn $ A.encode $ update
+
+      -- 2.
+      -- This is the most hard part.
+      r <- step st
+
+      -- 3. If its not over yet, prepare for the next loop.
+      --
+      --  * clientFrameId means, ...<TODO>
+      whenJust_ r $ \(newVdom, newSt, newFire) -> do
+        let clientFrameId = frameId -- for now
+        let newUpdate = UpdateDOM frameId (Just clientFrameId) (V.diff newVdom vdom)
+        runLoop conn newUpdate newVdom newSt newFire (frameId + 1)
+
+
+    whenJust_ :: Applicative m => Maybe a -> (a -> m ()) -> m ()
+    whenJust_ m f = void $ traverse f m
+
     go :: Connection -> TVar (Maybe (Event -> IO ())) -> TVar (Maybe Int) -> Maybe V.HTML -> st -> Int -> IO ()
     go conn chan cf oldDom st serverFrame = do
       r <- step st
