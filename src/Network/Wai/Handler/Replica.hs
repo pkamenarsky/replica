@@ -110,6 +110,10 @@ websocketApp initial step pendingConn = do
     --
     --    * We should distinguish *frame* and *frame ID*.
     --    * special treat the *first step*. We'll need to do this for SSR(server-side rendering)
+    --    * Two thread commnicating throw two tvar, its kinad hard to reason about and making
+    --      it hard to understand the flow.
+    --      We only need concurency while `running` function (2) part, so changed only that
+    --      part runs concurrently.
     --
     -- minor changes
     --
@@ -118,25 +122,29 @@ websocketApp initial step pendingConn = do
     --
     run :: Connection -> IO ()
     run conn = do
+      -- 0. Get initial Frame.
+      --
+      -- st/step
       r <- step initial
       whenJust_ r $ \(vdom, st, fire) -> running conn (ReplaceDOM vdom) vdom st fire 1
 
+    -- | Running loop
+    --
+    -- 1) Show frame(#id = frameId) to client
+    --
+    -- 2) 次の一歩を進める。
+    -- This is the most hard part.
+    --
+    -- 3). If its not over yet, prepare for the next loop.
+    --
+    --  * clientFrameId means, ...<TODO>
+    --
     -- TODO: name `update` doesn't fit..
     running :: Connection -> Update -> V.HTML -> st -> (Event -> IO ()) -> Int -> IO ()
     running conn update vdom st fire frameId = do
-
-      -- 1. Show frame(#id = frameId) to client
-      sendTextData conn $ A.encode $ update
-
-      -- 2. 次の一歩を進める。
-      --
-      -- This is the most hard part.
-      r <- step st
-
-      -- 3. If its not over yet, prepare for the next loop.
-      --
-      --  * clientFrameId means, ...<TODO>
-      whenJust_ r $ \(newVdom, newSt, newFire) -> do
+      sendTextData conn $ A.encode $ update                 -- (1)
+      r <- step st                                           -- (2)
+      whenJust_ r $ \(newVdom, newSt, newFire) -> do         -- (3)
         let clientFrameId = frameId -- for now
         let newUpdate = UpdateDOM frameId (Just clientFrameId) (V.diff newVdom vdom)
         running conn newUpdate newVdom newSt newFire (frameId + 1)
