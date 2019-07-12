@@ -109,11 +109,12 @@ websocketApp initial step pendingConn = do
     -- change
     --
     --    * We should distinguish *frame* and *frame ID*.
-    --    * special treat the *first step*. We'll need to do this for SSR(server-side rendering)
+    --    * Excluding the *first step* from loop. We'll need to do this for SSR(server-side rendering)
     --    * Two thread commnicating throw two tvar, its kinad hard to reason about and making
     --      it hard to understand the flow.
     --      We only need concurency while `running` function (2) part, so changed only that
     --      part runs concurrently.
+    --    * changed the loop to make showing the vdom first. I think this is more easy to reason.
     --
     -- minor changes
     --
@@ -135,11 +136,13 @@ websocketApp initial step pendingConn = do
     -- 2) 次の一歩を進める。
     -- This is the most hard part.
     --
-    -- 3). If its not over yet, prepare for the next loop.
+    -- 3). If its not over yet, prepare for the next step.
     --
     --  * clientFrameId means, ...<TODO>
     --
     -- TODO: name `update` doesn't fit..
+    -- TODO: Pair of V.HTML and (Event -> IO ()) is 不可分。maybe define a type for it?
+    -- TODO: Frame { frameId :: Int, html :: V.HTML, fire :: (Event -> IO ()) } が正しい気がしてきた。
     running :: Connection -> Update -> V.HTML -> st -> (Event -> IO ()) -> Int -> IO ()
     running conn update vdom st fire frameId = do
       sendTextData conn $ A.encode $ update                 -- (1)
