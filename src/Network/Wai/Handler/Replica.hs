@@ -5,7 +5,9 @@ module Network.Wai.Handler.Replica where
 
 import           Control.Concurrent             (forkIO, killThread)
 import           Control.Concurrent.STM         (TVar, atomically, newTVarIO, readTVar, writeTVar, retry)
+import           Control.Concurrent.Async       (withAsync, link)
 import           Control.Monad                  (join, forever, void)
+import           Control.Exception              (Exception, throwIO)
 
 import           Data.Aeson                     ((.:), (.=))
 import qualified Data.Aeson                     as A
@@ -15,6 +17,7 @@ import qualified Data.Text                      as T
 import qualified Data.Text.Encoding             as TE
 import qualified Data.Text.Lazy                 as TL
 import qualified Data.Text.Lazy.Builder         as TB
+import           Data.IORef                     (newIORef, readIORef, writeIORef)
 import           Network.HTTP.Types             (status200)
 
 import           Network.WebSockets             (ServerApp)
@@ -58,6 +61,12 @@ instance A.ToJSON Update where
     , "diff" .= ddiff
     ]
 
+data RunnerException
+  = IllfomedData
+  deriving Show
+
+instance Exception RunnerException
+
 app :: forall st.
      V.HTML
   -> ConnectionOptions
@@ -78,32 +87,8 @@ websocketApp :: forall st.
   -> ServerApp
 websocketApp initial step pendingConn = do
   conn <- acceptRequest pendingConn
-  chan <- newTVarIO Nothing
-  cf   <- newTVarIO Nothing
-
   forkPingThread conn 30
-
-  tid <- forkIO $ forever $ do
-    msg  <- receiveData conn
-    case A.decode msg of
-      Just msg' -> do
-        join $ atomically $ do
-          fire <- readTVar chan
-          case fire of
-            Just fire' -> do
-              writeTVar chan Nothing
-              writeTVar cf (Just $ evtClientFrame msg')
-              pure (fire' msg')
-            Nothing -> retry
-      Nothing -> traceIO $ "Couldn't decode event: " <> show msg
-
-  go conn chan cf Nothing initial 0
-
-  killThread tid
-
-  -- TODO: !!
   run conn
-
   where
     -- More clear version
     -- change
@@ -141,36 +126,33 @@ websocketApp initial step pendingConn = do
     --  * clientFrameId means, ...<TODO>
     --
     -- TODO: name `update` doesn't fit..
-    -- TODO: Pair of V.HTML and (Event -> IO ()) is 不可分。maybe define a type for it?
     -- TODO: Frame { frameId :: Int, html :: V.HTML, fire :: (Event -> IO ()) } が正しい気がしてきた。
     running :: Connection -> Update -> V.HTML -> st -> (Event -> IO ()) -> Int -> IO ()
     running conn update vdom st fire frameId = do
+
       sendTextData conn $ A.encode $ update                 -- (1)
-      r <- step st                                           -- (2)
+
+      firedEvVar <- newIORef Nothing
+      let readAndFireEvent = do                             -- (2.1)
+            ev' <- A.decode <$> receiveData conn
+            ev  <- maybe (throwIO IllfomedData) pure ev'
+            writeIORef firedEvVar (Just ev)
+            fire ev
+
+      r <- withAsync' readAndFireEvent $ step st             -- (2.2)
+
       whenJust_ r $ \(newVdom, newSt, newFire) -> do         -- (3)
-        let clientFrameId = frameId -- for now
-        let newUpdate = UpdateDOM frameId (Just clientFrameId) (V.diff newVdom vdom)
+        firedEvMaybe <- readIORef firedEvVar
+        let newUpdate = UpdateDOM
+              frameId
+              (evtClientFrame <$> firedEvMaybe)
+              (V.diff newVdom vdom)
         running conn newUpdate newVdom newSt newFire (frameId + 1)
 
+    -- Like `withAsync`, but it also stops the second action when
+    -- first actions ends with exception.
+    withAsync' :: IO () -> IO a -> IO a
+    withAsync' w m = withAsync w (\a -> link a *> m)
 
     whenJust_ :: Applicative m => Maybe a -> (a -> m ()) -> m ()
     whenJust_ m f = void $ traverse f m
-
-    go :: Connection -> TVar (Maybe (Event -> IO ())) -> TVar (Maybe Int) -> Maybe V.HTML -> st -> Int -> IO ()
-    go conn chan cf oldDom st serverFrame = do
-      r <- step st
-      case r of
-        Nothing -> pure ()
-        Just (newDom, next, fire) -> do
-          clientFrame <- atomically $ do
-            a <- readTVar cf
-            writeTVar cf Nothing
-            pure a
-
-          case oldDom of
-            Nothing      -> sendTextData conn $ A.encode $ ReplaceDOM newDom
-            Just oldDom' -> sendTextData conn $ A.encode $ UpdateDOM serverFrame clientFrame (V.diff oldDom' newDom)
-
-          atomically $ writeTVar chan (Just fire)
-
-          go conn chan cf (Just newDom) next (serverFrame + 1)
