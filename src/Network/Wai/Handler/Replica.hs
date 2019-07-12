@@ -107,25 +107,29 @@ websocketApp initial step pendingConn = do
   where
     -- More clear version
     -- change
+    --
     --    * We should distinguish *frame* and *frame ID*.
     --    * special treat the *first step*. We'll need to do this for SSR(server-side rendering)
     --
     -- minor changes
+    --
     --    * whenJust
     --    *
     --
     run :: Connection -> IO ()
     run conn = do
       r <- step initial
-      whenJust_ r $ \(vdom, st, fire) -> runLoop conn (ReplaceDOM vdom) vdom st fire 1
+      whenJust_ r $ \(vdom, st, fire) -> running conn (ReplaceDOM vdom) vdom st fire 1
 
-    runLoop :: Connection -> Update -> V.HTML -> st -> (Event -> IO ()) -> Int -> IO ()
-    runLoop conn update vdom st fire frameId = do
+    -- TODO: name `update` doesn't fit..
+    running :: Connection -> Update -> V.HTML -> st -> (Event -> IO ()) -> Int -> IO ()
+    running conn update vdom st fire frameId = do
 
-      -- 1. Show frame(#id = frameId) to user
+      -- 1. Show frame(#id = frameId) to client
       sendTextData conn $ A.encode $ update
 
-      -- 2.
+      -- 2. 次の一歩を進める。
+      --
       -- This is the most hard part.
       r <- step st
 
@@ -135,7 +139,7 @@ websocketApp initial step pendingConn = do
       whenJust_ r $ \(newVdom, newSt, newFire) -> do
         let clientFrameId = frameId -- for now
         let newUpdate = UpdateDOM frameId (Just clientFrameId) (V.diff newVdom vdom)
-        runLoop conn newUpdate newVdom newSt newFire (frameId + 1)
+        running conn newUpdate newVdom newSt newFire (frameId + 1)
 
 
     whenJust_ :: Applicative m => Maybe a -> (a -> m ()) -> m ()

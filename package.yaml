@@ -33,6 +33,7 @@ dependencies:
 - wai
 - websockets
 - wai-websockets
+- async
 
 library:
   source-dirs: src
