@@ -436,7 +436,7 @@ function connect() {
         break;
       case CLOSE_CODE_INTERNAL_ERROR:
         // Error occured on server-side.
-        alert("Error occured. Please reload the page.");
+        alert("Internal server error, please reload the page: " + event.reason);
         break;
       default:
         // Other reasons. Some of them could be worth trying re-connecting.
