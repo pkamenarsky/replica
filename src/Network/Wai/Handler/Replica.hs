@@ -63,7 +63,7 @@ app :: forall st.
      V.HTML
   -> ConnectionOptions
   -> st
-  -> (st -> IO (Maybe (V.HTML, st, Event -> IO ())))
+  -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
   -> Application
 app index options initial step
   = websocketsOr options (websocketApp initial step) backupApp
@@ -75,7 +75,7 @@ app index options initial step
 
 websocketApp :: forall st.
      st
-  -> (st -> IO (Maybe (V.HTML, st, Event -> IO ())))
+  -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
   -> ServerApp
 websocketApp initial step pendingConn = do
   conn <- acceptRequest pendingConn
@@ -92,9 +92,12 @@ websocketApp initial step pendingConn = do
           fire <- readTVar chan
           case fire of
             Just fire' -> do
-              writeTVar chan Nothing
-              writeTVar cf (Just $ evtClientFrame msg')
-              pure (fire' msg')
+              case fire' msg' of
+                Just io -> do
+                  writeTVar chan Nothing
+                  writeTVar cf (Just $ evtClientFrame msg')
+                  pure io
+                Nothing -> pure (pure ())
             Nothing -> retry
       Nothing -> traceIO $ "Couldn't decode event: " <> show msg
 
@@ -107,7 +110,7 @@ websocketApp initial step pendingConn = do
   where
     closeCodeInternalError = 1011
 
-    go :: Connection -> TVar (Maybe (Event -> IO ())) -> TVar (Maybe Int) -> Maybe V.HTML -> st -> Int -> IO ()
+    go :: Connection -> TVar (Maybe (Event -> Maybe (IO ()))) -> TVar (Maybe Int) -> Maybe V.HTML -> st -> Int -> IO ()
     go conn chan cf oldDom st serverFrame = do
       r <- step st
       case r of
