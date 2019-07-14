@@ -6,7 +6,7 @@ module Network.Wai.Handler.Replica where
 import           Control.Concurrent             (forkIO, killThread)
 import           Control.Concurrent.STM         (TVar, atomically, newTVarIO, readTVar, writeTVar, retry)
 import           Control.Monad                  (join, forever)
-import           Control.Exception              (SomeException(SomeException), evaluate, try, onException, mask_)
+import           Control.Exception              (SomeException(SomeException), evaluate, try)
 
 import           Data.Aeson                     ((.:), (.=))
 import qualified Data.Aeson                     as A
