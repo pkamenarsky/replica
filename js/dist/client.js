@@ -257,6 +257,11 @@ function buildDOM(ws, dom, index, parent) {
     }
     return element;
 }
+// Reference:
+// https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent
+// https://tools.ietf.org/html/rfc6455#section-7.4
+const CLOSE_CODE_NORMAL_CLOSURE = 1000;
+const CLOSE_CODE_INTERNAL_ERROR = 1011;
 function connect() {
     let root = document.createElement('div');
     const port = window.location.port ? window.location.port : (window.location.protocol === 'http' ? 80 : 443);
@@ -282,6 +287,19 @@ function connect() {
                     patch(ws, update.serverFrame, update.diff, root);
                 }
                 break;
+        }
+    };
+    ws.onclose = (event) => {
+        switch (event.code) {
+            case CLOSE_CODE_NORMAL_CLOSURE:
+                // Server-side gracefully ended.
+                break;
+            case CLOSE_CODE_INTERNAL_ERROR:
+                // Error occured on server-side.
+                alert("Internal server error, please reload the page: " + event.reason);
+                break;
+            default:
+            // Other reasons. Some of them could be worth trying re-connecting.
         }
     };
 }
