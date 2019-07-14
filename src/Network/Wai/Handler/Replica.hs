@@ -6,7 +6,7 @@ module Network.Wai.Handler.Replica where
 import           Control.Concurrent             (forkIO, killThread)
 import           Control.Concurrent.STM         (TVar, atomically, newTVarIO, readTVar, writeTVar, retry)
 import           Control.Monad                  (join, forever)
-import           Control.Exception              (onException)
+import           Control.Exception              (SomeException(SomeException), evaluate, try, onException, mask_)
 
 import           Data.Aeson                     ((.:), (.=))
 import qualified Data.Aeson                     as A
@@ -85,7 +85,7 @@ websocketApp initial step pendingConn = do
   forkPingThread conn 30
 
   tid <- forkIO $ forever $ do
-    msg  <- receiveData conn
+    msg <- receiveData conn
     case A.decode msg of
       Just msg' -> do
         join $ atomically $ do
@@ -101,9 +101,11 @@ websocketApp initial step pendingConn = do
             Nothing -> retry
       Nothing -> traceIO $ "Couldn't decode event: " <> show msg
 
-  go conn chan cf Nothing initial 0
-    `onException` sendCloseCode conn closeCodeInternalError ("internal error" :: T.Text)
-  sendClose conn ("done" :: T.Text)
+  r <- try $ go conn chan cf Nothing initial 0
+
+  case r of
+    Left (SomeException e) -> sendCloseCode conn closeCodeInternalError (T.pack $ show e)
+    Right _ -> sendClose conn ("done" :: T.Text)
 
   killThread tid
 
@@ -121,9 +123,15 @@ websocketApp initial step pendingConn = do
             writeTVar cf Nothing
             pure a
 
+          -- Throw exceptions here
+          newDom' <- evaluate newDom
+
           case oldDom of
-            Nothing      -> sendTextData conn $ A.encode $ ReplaceDOM newDom
-            Just oldDom' -> sendTextData conn $ A.encode $ UpdateDOM serverFrame clientFrame (V.diff oldDom' newDom)
+            Nothing      -> sendTextData conn $ A.encode $ ReplaceDOM newDom'
+            Just oldDom' -> do
+              -- Throw exceptions here
+              diff <- evaluate (V.diff oldDom' newDom')
+              sendTextData conn $ A.encode $ UpdateDOM serverFrame clientFrame diff
 
           atomically $ writeTVar chan (Just fire)
 
