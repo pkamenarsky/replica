@@ -3,10 +3,8 @@
 
 module Network.Wai.Handler.Replica where
 
-import           Control.Concurrent             (forkIO, killThread)
-import           Control.Concurrent.STM         (TVar, atomically, newTVarIO, readTVar, writeTVar, retry)
 import           Control.Concurrent.Async       (withAsync, link)
-import           Control.Monad                  (join, forever, void)
+import           Control.Monad                  (void)
 import           Control.Exception              (Exception, throwIO)
 
 import           Data.Aeson                     ((.:), (.=))
@@ -27,8 +25,6 @@ import           Network.Wai.Handler.WebSockets (websocketsOr)
 
 import qualified Replica.VDOM                   as V
 import qualified Replica.VDOM.Render            as R
-
-import           Debug.Trace                    (traceIO)
 
 data Event = Event
   { evtType        :: T.Text
@@ -142,11 +138,8 @@ websocketApp initial step pendingConn = do
       r <- withAsync' readAndFireEvent $ step st             -- (2.2)
 
       whenJust_ r $ \(newVdom, newSt, newFire) -> do         -- (3)
-        firedEvMaybe <- readIORef firedEvVar
-        let newUpdate = UpdateDOM
-              frameId
-              (evtClientFrame <$> firedEvMaybe)
-              (V.diff newVdom vdom)
+        firedEv <- readIORef firedEvVar
+        let newUpdate = UpdateDOM frameId (evtClientFrame <$> firedEv) (V.diff newVdom vdom)
         running conn newUpdate newVdom newSt newFire (frameId + 1)
 
     -- Like `withAsync`, but it also stops the second action when
