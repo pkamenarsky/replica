@@ -3,16 +3,9 @@
 
 module Network.Wai.Handler.Replica where
 
-<<<<<<< HEAD
 import           Control.Concurrent.Async       (withAsync, link)
 import           Control.Monad                  (void)
-import           Control.Exception              (Exception, throwIO)
-=======
-import           Control.Concurrent             (forkIO, killThread)
-import           Control.Concurrent.STM         (TVar, atomically, newTVarIO, readTVar, writeTVar, retry)
-import           Control.Monad                  (join, forever)
-import           Control.Exception              (SomeException(SomeException), evaluate, try)
->>>>>>> master
+import           Control.Exception              (SomeException(SomeException),Exception, throwIO, evaluate, try)
 
 import           Data.Aeson                     ((.:), (.=))
 import qualified Data.Aeson                     as A
@@ -64,8 +57,12 @@ instance A.ToJSON Update where
     , "diff" .= ddiff
     ]
 
+-- 恐らく実装エラーにより発生したであろう
+-- These exceptions are not to ment recoverable. Should stop the context.
+-- TODO: more rich to make debuggin easier?
 data RunnerException
   = IllfomedData
+  | InvalidEvent
   deriving Show
 
 instance Exception RunnerException
@@ -96,6 +93,7 @@ websocketApp initial step pendingConn = do
     Left (SomeException e) -> sendCloseCode conn closeCodeInternalError (T.pack $ show e)
     Right _                -> sendClose conn ("done" :: T.Text)
   where
+    closeCodeInternalError = 1011
     -- More clear version
     -- change
     --
@@ -145,9 +143,9 @@ websocketApp initial step pendingConn = do
             ev' <- A.decode <$> receiveData conn
             ev  <- maybe (throwIO IllfomedData) pure ev'
             case fire ev of
-              Notihing
+              Nothing
                 | evtClientFrame ev < frameId -> readAndFireEvent   --skip
-                | otherwise -> throwIO IllfomedData
+                | otherwise -> throwIO InvalidEvent
               Just fire' -> do
                 writeIORef firedEvVar (Just ev)
                 fire'
@@ -155,8 +153,8 @@ websocketApp initial step pendingConn = do
       r <- withAsync' readAndFireEvent $ step st             -- (2.2)
 
       whenJust_ r $ \(_newVdom, newSt, newFire) -> do         -- (3)
-        newDom  <- evaluate _newVdom
-        diff    <- V.diff newVdom vdom
+        newVdom <- evaluate _newVdom
+        diff    <- evaluate $ V.diff newVdom vdom
         firedEv <- readIORef firedEvVar
         let newUpdate = UpdateDOM frameId (evtClientFrame <$> firedEv) diff
         running conn newUpdate newVdom newSt newFire (frameId + 1)
