@@ -102,9 +102,9 @@ websocketApp initial step pendingConn = do
     closeCodeInternalError = 1011
 
 
--- 恐らく実装エラーにより発生したであろう
 -- These exceptions are not to ment recoverable. Should stop the context.
--- TODO: more rich to make debuggin easier?
+-- TODO: Make it more rich to make debug easier?
+-- TODO: Split to ContextError and ProtocolError
 data ContextError
   = IllformedData
   | InvalidEvent
@@ -112,26 +112,7 @@ data ContextError
 
 instance Exception ContextError
 
-data Frame = Frame
-  { frameNumber :: Int
-  , frameVdom :: V.HTML
-  , frameFire :: Event -> Maybe (IO ())
-  }
-
-firstStep
-  :: st
-  -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
-  -> IO (Maybe (V.HTML, IO Context))
-firstStep initial step = do
-  r <- step initial
-  case r of
-    Nothing ->
-      pure Nothing
-    Just (_vdom, st, fire) -> do
-      vdom <- evaluate _vdom
-      pure $ Just (vdom, startContext step (vdom, st, fire))
-
--- | Attacehes context to webcoket connection and start
+-- | Attacehes context to webcoket connection
 --
 -- This function will block until:
 --
@@ -141,14 +122,20 @@ firstStep initial step = do
 --
 -- Some notes:
 --
---   * Assumes this context is not attached to any other connection.
+--   * Assumes this context is not attached to any other connection. (※1)
 --   * Connection/Protocol-wise exception(e.g. connection closed by client) will not stop the context.
 --   * Atleast one frame will always be sent immiedatly. Even in a case where context is already
 --     over/stopped by exception. In those case, it sends one frame and immiedeatly returns.
 --   * First frame will be sent as `ReplaceDOM`, following frame will be sent as `UpdateDOM`
 --   * In some rare case, when stepLoop is looping too fast, few frame might be get skipped,
---     but its not much a problems since those frame would have been shown only for a moment.
+--     but its not much a problems since those frame would have been shown only for a moment. (※2)
 --
+-- ※1
+-- Actually, there is no problem attaching more than one connection to a single context.
+-- We can do crazy things like 'read-only' attach and make a admin page where you can
+-- peek users realtime page.
+--
+-- ※2
 -- Yeah, this framework is probably not meant for showing smooth animation.
 -- We can actually mitigate this by preserving recent frames, not just the latest one.
 --
@@ -191,12 +178,31 @@ attachContextToWebsocket conn ctx = withWorker eventLoop frameLoop
 --  * Only exception to this is when exception occurs, last setted frame's `stepedBy` could be empty forever.
 --
 -- TODO: TMVar in a TVar. Is that a good idea?
--- TODO: name `Context` doesn't sound good.. rename
+-- TODO: Is name `Context` appropiate?
 data Context = Context
   { ctxFrame      :: TVar (Frame, TMVar (Maybe Event))
   , ctxEventQueue :: TQueue Event   -- TBqueue might be better
   , ctxThread     :: Async ()
   }
+
+data Frame = Frame
+  { frameNumber :: Int
+  , frameVdom :: V.HTML
+  , frameFire :: Event -> Maybe (IO ())
+  }
+
+firstStep
+  :: st
+  -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
+  -> IO (Maybe (V.HTML, IO Context))
+firstStep initial step = do
+  r <- step initial
+  case r of
+    Nothing ->
+      pure Nothing
+    Just (_vdom, st, fire) -> do
+      vdom <- evaluate _vdom
+      pure $ Just (vdom, startContext step (vdom, st, fire))
 
 startContext
   :: (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
@@ -243,9 +249,9 @@ stepLoop setNewFrame step st frame = do
       let newFrame = Frame (frameNumber frame + 1) newVdom newFire
       stepLoop setNewFrame step newSt newFrame
 
--- (1) STM's (<|>) は左偏があることに注意。
---   どちらを左にしても event lost は防げない...
--- (2) 上記の (<|>) の左偏により stepedBy は既に入っている可能性がある
+-- NOTE:
+-- Don't foregt that STM's (<|>) prefers left(its not fair like mvar).
+-- Because of (1), at (2) `stepedBy` could be already filled even though its in the same STM action.
 fireLoop
   :: STM (Frame, TMVar (Maybe Event))
   -> STM Event
