@@ -88,81 +88,91 @@ websocketApp :: forall st.
 websocketApp initial step pendingConn = do
   conn <- acceptRequest pendingConn
   forkPingThread conn 30
-  r <- try $ run conn
+  r <- try $ run conn initial step
   case r of
     Left (SomeException e) -> sendCloseCode conn closeCodeInternalError (T.pack $ show e)
     Right _                -> sendClose conn ("done" :: T.Text)
   where
     closeCodeInternalError = 1011
-    -- More clear version
-    -- change
-    --
-    --    * We should distinguish *frame* and *frame ID*.
-    --    * Excluding the *first step* from loop. We'll need to do this for SSR(server-side rendering)
-    --    * Two thread commnicating throw two tvar, its kinad hard to reason about and making
-    --      it hard to understand the flow.
-    --      We only need concurency while `running` function (2) part, so changed only that
-    --      part runs concurrently.
-    --    * changed the loop to make showing the vdom first. I think this is more easy to reason.
-    --
-    -- minor changes
-    --
-    --    * whenJust
-    --    *
-    --
-    run :: Connection -> IO ()
-    run conn = do
-      -- 0. Get initial Frame.
-      --
-      -- st/step
-      r <- step initial
-      whenJust_ r $ \(_vdom, st, fire) -> do
-        vdom <- evaluate _vdom
-        running conn (ReplaceDOM vdom) vdom st fire 1
 
-    -- | Running loop
-    --
-    -- 1) Show frame(#id = frameId) to client
-    --
-    -- 2) 次の一歩を進める。
-    -- This is the most hard part.
-    --
-    -- 3). If its not over yet, prepare for the next step.
-    --
-    --  * clientFrameId means, ...<TODO>
-    --
-    -- TODO: name `update` doesn't fit..
-    -- TODO: Frame { frameId :: Int, html :: V.HTML, fire :: (Event -> IO ()) } が正しい気がしてきた。
-    running :: Connection -> Update -> V.HTML -> st -> (Event -> Maybe (IO ())) -> Int -> IO ()
-    running conn update vdom st fire frameId = do
+-- More clear version
+-- change
+--
+--    * We should distinguish *frame* and *frame ID*.
+--    * Excluding the *first step* from loop. We'll need to do this for SSR(server-side rendering)
+--    * Two thread commnicating throw two tvar, its kinad hard to reason about and making
+--      it hard to understand the flow.
+--      We only need concurency while `running` function (2) part, so changed only that
+--      part runs concurrently.
+--    * changed the loop to make showing the vdom first. I think this is more easy to reason.
+--
+-- minor changes
+--
+--    * whenJust
+--    *
+--
+run
+  :: Connection
+  -> st
+  -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
+  -> IO ()
+run conn initial step = do
+  r <- step initial
+  whenJust_ r $ \(_vdom, st, fire) -> do
+    vdom <- evaluate _vdom
+    running conn step (ReplaceDOM vdom) vdom st fire 1
 
-      sendTextData conn $ A.encode $ update                 -- (1)
+-- | Running loop
+--
+-- 1) Show frame(#id = frameId) to client
+--
+-- 2) 次の一歩を進める。
+-- This is the most hard part.
+--
+-- 3). If its not over yet, prepare for the next step.
+--
+--  * clientFrameId means, ...<TODO>
+--
+-- TODO: name `update` doesn't fit..
+-- TODO: Frame { frameId :: Int, html :: V.HTML, fire :: (Event -> IO ()) } が正しい気がしてきた。
+running
+  :: Connection
+  -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
+  -> Update
+  -> V.HTML
+  -> st
+  -> (Event -> Maybe (IO ()))
+  -> Int
+  -> IO ()
+running conn step update vdom st fire frameId = do
 
-      firedEvVar <- newIORef Nothing
-      let readAndFireEvent = do                             -- (2.1)
-            ev' <- A.decode <$> receiveData conn
-            ev  <- maybe (throwIO IllfomedData) pure ev'
-            case fire ev of
-              Nothing
-                | evtClientFrame ev < frameId -> readAndFireEvent   --skip
-                | otherwise -> throwIO InvalidEvent
-              Just fire' -> do
-                writeIORef firedEvVar (Just ev)
-                fire'
+  sendTextData conn $ A.encode $ update                 -- (1)
 
-      r <- withAsync' readAndFireEvent $ step st             -- (2.2)
+  firedEvVar <- newIORef Nothing
+  let readAndFireEvent = do                             -- (2.1)
+        ev' <- A.decode <$> receiveData conn
+        ev  <- maybe (throwIO IllfomedData) pure ev'
+        case fire ev of
+          Nothing
+            | evtClientFrame ev < frameId -> readAndFireEvent   --skip
+            | otherwise -> throwIO InvalidEvent
+          Just fire' -> do
+            writeIORef firedEvVar (Just ev)
+            fire'
 
-      whenJust_ r $ \(_newVdom, newSt, newFire) -> do         -- (3)
-        newVdom <- evaluate _newVdom
-        diff    <- evaluate $ V.diff newVdom vdom
-        firedEv <- readIORef firedEvVar
-        let newUpdate = UpdateDOM frameId (evtClientFrame <$> firedEv) diff
-        running conn newUpdate newVdom newSt newFire (frameId + 1)
+  r <- withAsync' readAndFireEvent $ step st             -- (2.2)
 
-    -- Like `withAsync`, but it also stops the second action when
-    -- first actions ends with exception.
-    withAsync' :: IO () -> IO a -> IO a
-    withAsync' w m = withAsync w (\a -> link a *> m)
+  whenJust_ r $ \(_newVdom, newSt, newFire) -> do         -- (3)
+    newVdom <- evaluate _newVdom
+    diff    <- evaluate $ V.diff newVdom vdom
+    firedEv <- readIORef firedEvVar
+    let newUpdate = UpdateDOM frameId (evtClientFrame <$> firedEv) diff
+    running conn step newUpdate newVdom newSt newFire (frameId + 1)
 
-    whenJust_ :: Applicative m => Maybe a -> (a -> m ()) -> m ()
-    whenJust_ m f = void $ traverse f m
+-- Like `withAsync`, but it also stops the second action when
+-- first actions ends with exception.
+withAsync' :: IO () -> IO a -> IO a
+withAsync' w m = withAsync w (\a -> link a *> m)
+
+whenJust_ :: Applicative m => Maybe a -> (a -> m ()) -> m ()
+whenJust_ m f = void $ traverse f m
