@@ -29,23 +29,23 @@ t = id
 
 type Path = [Int]
 
-fireWithAttrs :: Attrs -> T.Text -> DOMEvent -> IO ()
+fireWithAttrs :: Attrs -> T.Text -> DOMEvent -> Maybe (IO ())
 fireWithAttrs attrs evtName evtValue = case M.lookup evtName attrs of
-  Just (AEvent attrEvent) -> attrEvent evtValue
-  _ -> pure ()
+  Just (AEvent attrEvent) -> Just (attrEvent evtValue)
+  _ -> Nothing
 
-fireEvent :: HTML -> Path -> T.Text -> DOMEvent -> IO ()
-fireEvent _ []      = \_ _ -> pure ()
+fireEvent :: HTML -> Path -> T.Text -> DOMEvent -> Maybe (IO ())
+fireEvent _ []      = \_ _ -> Nothing
 fireEvent ds (x:xs) = if x < length ds
   then fireEventOnNode (ds !! x) xs
-  else \_ _ -> pure ()
+  else \_ _ -> Nothing
   where
     fireEventOnNode (VNode _ attrs _) []        = fireWithAttrs attrs
     fireEventOnNode (VLeaf _ attrs) []          = fireWithAttrs attrs
     fireEventOnNode (VNode _ _ children) (p:ps) = if p < length children
       then fireEventOnNode (children !! p) ps
-      else \_ _ -> pure ()
-    fireEventOnNode _ _                         = \_ _ -> pure ()
+      else \_ _ -> Nothing
+    fireEventOnNode _ _                         = \_ _ -> Nothing
 
 clientDriver :: B.ByteString
 clientDriver = $(FE.embedFile "./js/dist/client.js")

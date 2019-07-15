@@ -3,9 +3,16 @@
 
 module Network.Wai.Handler.Replica where
 
+<<<<<<< HEAD
 import           Control.Concurrent.Async       (withAsync, link)
 import           Control.Monad                  (void)
 import           Control.Exception              (Exception, throwIO)
+=======
+import           Control.Concurrent             (forkIO, killThread)
+import           Control.Concurrent.STM         (TVar, atomically, newTVarIO, readTVar, writeTVar, retry)
+import           Control.Monad                  (join, forever)
+import           Control.Exception              (SomeException(SomeException), evaluate, try)
+>>>>>>> master
 
 import           Data.Aeson                     ((.:), (.=))
 import qualified Data.Aeson                     as A
@@ -19,7 +26,7 @@ import           Data.IORef                     (newIORef, readIORef, writeIORef
 import           Network.HTTP.Types             (status200)
 
 import           Network.WebSockets             (ServerApp)
-import           Network.WebSockets.Connection  (ConnectionOptions, Connection, acceptRequest, forkPingThread, receiveData, sendTextData)
+import           Network.WebSockets.Connection  (ConnectionOptions, Connection, acceptRequest, forkPingThread, receiveData, sendTextData, sendClose, sendCloseCode)
 import           Network.Wai                    (Application, responseLBS)
 import           Network.Wai.Handler.WebSockets (websocketsOr)
 
@@ -67,7 +74,7 @@ app :: forall st.
      V.HTML
   -> ConnectionOptions
   -> st
-  -> (st -> IO (Maybe (V.HTML, st, Event -> IO ())))
+  -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
   -> Application
 app index options initial step
   = websocketsOr options (websocketApp initial step) backupApp
@@ -79,12 +86,15 @@ app index options initial step
 
 websocketApp :: forall st.
      st
-  -> (st -> IO (Maybe (V.HTML, st, Event -> IO ())))
+  -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
   -> ServerApp
 websocketApp initial step pendingConn = do
   conn <- acceptRequest pendingConn
   forkPingThread conn 30
-  run conn
+  r <- try $ run conn
+  case r of
+    Left (SomeException e) -> sendCloseCode conn closeCodeInternalError (T.pack $ show e)
+    Right _                -> sendClose conn ("done" :: T.Text)
   where
     -- More clear version
     -- change
@@ -108,7 +118,9 @@ websocketApp initial step pendingConn = do
       --
       -- st/step
       r <- step initial
-      whenJust_ r $ \(vdom, st, fire) -> running conn (ReplaceDOM vdom) vdom st fire 1
+      whenJust_ r $ \(_vdom, st, fire) -> do
+        vdom <- evaluate _vdom
+        running conn (ReplaceDOM vdom) vdom st fire 1
 
     -- | Running loop
     --
@@ -123,7 +135,7 @@ websocketApp initial step pendingConn = do
     --
     -- TODO: name `update` doesn't fit..
     -- TODO: Frame { frameId :: Int, html :: V.HTML, fire :: (Event -> IO ()) } が正しい気がしてきた。
-    running :: Connection -> Update -> V.HTML -> st -> (Event -> IO ()) -> Int -> IO ()
+    running :: Connection -> Update -> V.HTML -> st -> (Event -> Maybe (IO ())) -> Int -> IO ()
     running conn update vdom st fire frameId = do
 
       sendTextData conn $ A.encode $ update                 -- (1)
@@ -132,14 +144,21 @@ websocketApp initial step pendingConn = do
       let readAndFireEvent = do                             -- (2.1)
             ev' <- A.decode <$> receiveData conn
             ev  <- maybe (throwIO IllfomedData) pure ev'
-            writeIORef firedEvVar (Just ev)
-            fire ev
+            case fire ev of
+              Notihing
+                | evtClientFrame ev < frameId -> readAndFireEvent   --skip
+                | otherwise -> throwIO IllfomedData
+              Just fire' -> do
+                writeIORef firedEvVar (Just ev)
+                fire'
 
       r <- withAsync' readAndFireEvent $ step st             -- (2.2)
 
-      whenJust_ r $ \(newVdom, newSt, newFire) -> do         -- (3)
+      whenJust_ r $ \(_newVdom, newSt, newFire) -> do         -- (3)
+        newDom  <- evaluate _newVdom
+        diff    <- V.diff newVdom vdom
         firedEv <- readIORef firedEvVar
-        let newUpdate = UpdateDOM frameId (evtClientFrame <$> firedEv) (V.diff newVdom vdom)
+        let newUpdate = UpdateDOM frameId (evtClientFrame <$> firedEv) diff
         running conn newUpdate newVdom newSt newFire (frameId + 1)
 
     -- Like `withAsync`, but it also stops the second action when
