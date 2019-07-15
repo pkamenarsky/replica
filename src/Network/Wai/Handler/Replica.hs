@@ -118,22 +118,6 @@ data Frame = Frame
   , frameFire :: Event -> Maybe (IO ())
   }
 
--- More clear version
--- change
---
---    * We should distinguish *frame* and *frame ID*.
---    * Excluding the *first step* from loop. We'll need to do this for SSR(server-side rendering)
---    * Two thread commnicating throw two tvar, its kinad hard to reason about and making
---      it hard to understand the flow.
---      We only need concurency while `running` function (2) part, so changed only that
---      part runs concurrently.
---    * changed the loop to make showing the vdom first. I think this is more easy to reason.
---
--- minor changes
---
---    * whenJust
---    *
---
 firstStep
   :: st
   -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
@@ -200,8 +184,6 @@ attachContextToWebsocket conn ctx = withWorker eventLoop frameLoop
       ev' <- A.decode <$> receiveData conn
       ev  <- maybe (throwIO IllformedData) pure ev'
       atomically $ writeTQueue (ctxEventQueue ctx) ev
-
-----------------------------------------------------------------------------
 
 -- | Context
 --
