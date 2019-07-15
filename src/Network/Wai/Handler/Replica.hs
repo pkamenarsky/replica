@@ -4,7 +4,9 @@
 module Network.Wai.Handler.Replica where
 
 import           Control.Concurrent.Async       (withAsync, link)
-import           Control.Monad                  (void)
+import           Control.Concurrent.STM
+import           Control.Monad                  (join, void, forever)
+import           Control.Applicative            ((<|>))
 import           Control.Exception              (SomeException(SomeException),Exception, throwIO, evaluate, try)
 
 import           Data.Aeson                     ((.:), (.=))
@@ -15,6 +17,8 @@ import qualified Data.Text                      as T
 import qualified Data.Text.Encoding             as TE
 import qualified Data.Text.Lazy                 as TL
 import qualified Data.Text.Lazy.Builder         as TB
+import           Data.Bool                      (bool)
+import           Data.Void                      (Void)
 import           Data.IORef                     (newIORef, readIORef, writeIORef)
 import           Network.HTTP.Types             (status200)
 
@@ -57,16 +61,6 @@ instance A.ToJSON Update where
     , "diff" .= ddiff
     ]
 
--- 恐らく実装エラーにより発生したであろう
--- These exceptions are not to ment recoverable. Should stop the context.
--- TODO: more rich to make debuggin easier?
-data RunnerException
-  = IllfomedData
-  | InvalidEvent
-  deriving Show
-
-instance Exception RunnerException
-
 app :: forall st.
      V.HTML
   -> ConnectionOptions
@@ -88,12 +82,37 @@ websocketApp :: forall st.
 websocketApp initial step pendingConn = do
   conn <- acceptRequest pendingConn
   forkPingThread conn 30
-  r <- try $ run conn initial step
+  r <- try $ do
+    s <- firstStep initial step
+    case s of
+      Nothing ->
+        pure ()
+      Just (_initialFrame, runner) ->
+        -- `initialFrame` can be used for SSR(server-side rendering). We aren't using it yet,
+        -- so its prefixed by underscore `_`.
+        runner conn
   case r of
     Left (SomeException e) -> sendCloseCode conn closeCodeInternalError (T.pack $ show e)
     Right _                -> sendClose conn ("done" :: T.Text)
   where
     closeCodeInternalError = 1011
+
+
+-- 恐らく実装エラーにより発生したであろう
+-- These exceptions are not to ment recoverable. Should stop the context.
+-- TODO: more rich to make debuggin easier?
+data ContextError
+  = IllformedData
+  | InvalidEvent
+  deriving Show
+
+instance Exception ContextError
+
+data Frame = Frame
+  { frameNumber :: Int
+  , frameVdom :: V.HTML
+  , frameFire :: Event -> Maybe (IO ())
+  }
 
 -- More clear version
 -- change
@@ -111,16 +130,19 @@ websocketApp initial step pendingConn = do
 --    * whenJust
 --    *
 --
-run
-  :: Connection
-  -> st
+firstStep
+  :: st
   -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
-  -> IO ()
-run conn initial step = do
+  -> IO (Maybe (Frame, Connection -> IO ()))
+firstStep initial step = do
   r <- step initial
-  whenJust_ r $ \(_vdom, st, fire) -> do
-    vdom <- evaluate _vdom
-    running conn step (ReplaceDOM vdom) vdom st fire 1
+  case r of
+    Nothing ->
+      pure Nothing
+    Just (_vdom, st, fire) -> do
+      vdom <- evaluate _vdom
+      let frame = Frame 1 vdom fire
+      pure $ Just (frame, \conn -> running conn step (ReplaceDOM vdom) st frame)
 
 -- | Running loop
 --
@@ -139,22 +161,20 @@ running
   :: Connection
   -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
   -> Update
-  -> V.HTML
   -> st
-  -> (Event -> Maybe (IO ()))
-  -> Int
+  -> Frame
   -> IO ()
-running conn step update vdom st fire frameId = do
+running conn step update st frame = do
 
   sendTextData conn $ A.encode $ update                 -- (1)
 
   firedEvVar <- newIORef Nothing
   let readAndFireEvent = do                             -- (2.1)
         ev' <- A.decode <$> receiveData conn
-        ev  <- maybe (throwIO IllfomedData) pure ev'
-        case fire ev of
+        ev  <- maybe (throwIO IllformedData) pure ev'
+        case frameFire frame ev of
           Nothing
-            | evtClientFrame ev < frameId -> readAndFireEvent   --skip
+            | evtClientFrame ev < frameNumber frame -> readAndFireEvent   --skip
             | otherwise -> throwIO InvalidEvent
           Just fire' -> do
             writeIORef firedEvVar (Just ev)
@@ -164,10 +184,47 @@ running conn step update vdom st fire frameId = do
 
   whenJust_ r $ \(_newVdom, newSt, newFire) -> do         -- (3)
     newVdom <- evaluate _newVdom
-    diff    <- evaluate $ V.diff newVdom vdom
+    diff    <- evaluate $ V.diff newVdom (frameVdom frame)
     firedEv <- readIORef firedEvVar
-    let newUpdate = UpdateDOM frameId (evtClientFrame <$> firedEv) diff
-    running conn step newUpdate newVdom newSt newFire (frameId + 1)
+    let newUpdate = UpdateDOM (frameNumber frame + 1) (evtClientFrame <$> firedEv) diff
+    let newFrame = Frame (frameNumber frame + 1) newVdom newFire
+    running conn step newUpdate newSt newFrame
+
+stepLoop
+  :: (Frame -> IO (TMVar (Maybe Event)))
+  -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
+  -> st
+  -> Frame
+  -> IO ()
+stepLoop setNewFrame step st frame = do
+  stepedBy <- setNewFrame frame
+  r <- step st
+  _ <- atomically $ tryPutTMVar stepedBy Nothing
+  case r of
+    Nothing -> pure ()
+    Just (_newVdom, newSt, newFire) -> do
+      newVdom <- evaluate _newVdom
+      let newFrame = Frame (frameNumber frame + 1) newVdom newFire
+      stepLoop setNewFrame step newSt newFrame
+
+-- (1) STM's (<|>) は左偏があることに注意。
+-- (2) 上記の (<|>) の左偏により stepedBy は既に入っている可能性がある
+fireLoop
+  :: STM (Frame, TMVar (Maybe Event))
+  -> STM Event
+  -> IO Void
+fireLoop getNewFrame getEvent = forever $ do
+  (frame, stepedBy) <- atomically getNewFrame
+  let act = atomically $ do
+        r <- Left <$> getEvent <|> Right <$> readTMVar stepedBy -- (1)
+        case r of
+          Left ev -> case frameFire frame ev of
+            Nothing
+              | evtClientFrame ev < frameNumber frame -> pure $ join act
+              | otherwise -> throwSTM InvalidEvent
+            Just fire' -> bool (pure ()) fire' <$> tryPutTMVar stepedBy (Just ev)   -- (2)
+          Right _ -> pure $ pure ()
+  join act
 
 -- Like `withAsync`, but it also stops the second action when
 -- first actions ends with exception.
