@@ -3,12 +3,12 @@
 
 module Network.Wai.Handler.Replica where
 
-import           Control.Concurrent.Async       (Async, async, withAsync, waitCatchSTM, link, race)
+import           Control.Concurrent.Async       (Async, async, waitCatchSTM, race)
 import           Control.Concurrent.STM         (TMVar, TQueue, TVar, STM, atomically, retry, check, throwSTM
                                                 , newTVar, readTVar, writeTVar
                                                 , newTMVar, newEmptyTMVar, tryPutTMVar, readTMVar, isEmptyTMVar
                                                 , newTQueue, writeTQueue, readTQueue)
-import           Control.Monad                  (join, void, forever)
+import           Control.Monad                  (join, forever)
 import           Control.Applicative            ((<|>))
 import           Control.Exception              (SomeException(SomeException),Exception, throwIO, evaluate, try)
 
@@ -22,7 +22,6 @@ import qualified Data.Text.Lazy                 as TL
 import qualified Data.Text.Lazy.Builder         as TB
 import           Data.Bool                      (bool)
 import           Data.Void                      (Void, absurd)
-import           Data.IORef                     (newIORef, readIORef, writeIORef)
 import           Network.HTTP.Types             (status200)
 
 import           Network.WebSockets             (ServerApp)
@@ -147,60 +146,6 @@ firstStep initial step = do
     Just (_vdom, st, fire) -> do
       vdom <- evaluate _vdom
       pure $ Just (vdom, startContext step (vdom, st, fire))
-
--- | Running loop
---
--- 1) Show frame(#id = frameId) to client
---
--- 2) 次の一歩を進める。
--- This is the most hard part.
---
--- 3). If its not over yet, prepare for the next step.
---
---  * clientFrameId means, ...<TODO>
---
--- TODO: name `update` doesn't fit..
--- TODO: Frame { frameId :: Int, html :: V.HTML, fire :: (Event -> IO ()) } が正しい気がしてきた。
-running
-  :: Connection
-  -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
-  -> Update
-  -> st
-  -> Frame
-  -> IO ()
-running conn step update st frame = do
-
-  sendTextData conn $ A.encode $ update                 -- (1)
-
-  firedEvVar <- newIORef Nothing
-  let readAndFireEvent = do                             -- (2.1)
-        ev' <- A.decode <$> receiveData conn
-        ev  <- maybe (throwIO IllformedData) pure ev'
-        case frameFire frame ev of
-          Nothing
-            | evtClientFrame ev < frameNumber frame -> readAndFireEvent   --skip
-            | otherwise -> throwIO InvalidEvent
-          Just fire' -> do
-            writeIORef firedEvVar (Just ev)
-            fire'
-
-  r <- withAsync' readAndFireEvent $ step st             -- (2.2)
-
-  whenJust_ r $ \(_newVdom, newSt, newFire) -> do         -- (3)
-    newVdom <- evaluate _newVdom
-    diff    <- evaluate $ V.diff newVdom (frameVdom frame)
-    firedEv <- readIORef firedEvVar
-    let newUpdate = UpdateDOM (frameNumber frame + 1) (evtClientFrame <$> firedEv) diff
-    let newFrame = Frame (frameNumber frame + 1) newVdom newFire
-    running conn step newUpdate newSt newFrame
-  where
-    -- Like `withAsync`, but it also stops the second action when
-    -- first actions ends with exception.
-    withAsync' :: IO () -> IO a -> IO a
-    withAsync' w m = withAsync w (\a -> link a *> m)
-
-    whenJust_ :: Applicative m => Maybe a -> (a -> m ()) -> m ()
-    whenJust_ m f = void $ traverse f m
 
 -- | Attacehes context to webcoket connection and start
 --
