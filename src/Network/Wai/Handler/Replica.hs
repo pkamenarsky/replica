@@ -166,7 +166,7 @@ attachContextToWebsocket conn ctx = withWorker eventLoop frameLoop
       e <- atomically $  Left <$> getNewerFrame <|> Right <$> waitCatchSTM (ctxThread ctx)
       case e of
         Left (v@(frame,_), stepedBy) -> do
-          diff <- evaluate $ V.diff (frameVdom frame) (frameVdom prevFrame)
+          diff <- evaluate $ V.diff (frameVdom prevFrame) (frameVdom frame)
           let updateDom = UpdateDOM (frameNumber frame) (evtClientFrame <$> stepedBy) diff
           sendTextData conn $ A.encode $ updateDom
           frameLoop' v
