@@ -136,8 +136,9 @@ instance Exception ContextError
 -- peek users realtime page.
 --
 -- ※2
--- Yeah, this framework is probably not meant for showing smooth animation.
+-- This framework is probably not meant for showing smooth animation.
 -- We can actually mitigate this by preserving recent frames, not just the latest one.
+-- Or use `chan` to distribute frames.
 --
 attachContextToWebsocket :: Connection -> Context -> IO (Maybe SomeException)
 attachContextToWebsocket conn ctx = withWorker eventLoop frameLoop
@@ -174,8 +175,10 @@ attachContextToWebsocket conn ctx = withWorker eventLoop frameLoop
 
 -- | Context
 --
+--  NOTES:
+--
 --  * For every frame, its corresponding TMVar should get a value before the next (frame,stepedBy) is written.
---  * Only exception to this is when exception occurs, last setted frame's `stepedBy` could be empty forever.
+--    Only exception to this is when exception occurs, last setted frame's `stepedBy` could be empty forever.
 --
 -- TODO: TMVar in a TVar. Is that a good idea?
 -- TODO: Is name `Context` appropiate?
@@ -232,6 +235,21 @@ startContext step (vdom, st, fire) = do
 
     getEvent que = readTQueue que
 
+-- | stepLoop
+--
+-- Every step starts with showing user the frame. After that we wait for a step to proceed.
+-- Step could be procceded by either:
+--
+--   1) Client-side's event, which is recieved as `Event`, or
+--   2) Server-side event(e.g. io action returning a value)
+--
+-- Every frame has corresponding `TMVar (Maybe Event)` called `stepedBy`. It is initally empty.
+-- It is filled whith `Event` when case (1), and filled with `Nothing` when case (2). (※1)
+-- New frame won't be created and setted before we fill current frame's `stepedBy`.
+--
+-- ※1 Unfortunatlly, we don't have a garuntee that step was actually procceded by client-side event when
+-- `stepBy` is filled with `Just Event`. When we receive a dispatchable event, we fill `stepBy`
+-- before actually firing it. While firing the event, servier-side event could procceed the step.
 stepLoop
   :: (Frame -> IO (TMVar (Maybe Event)))
   -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
@@ -249,6 +267,10 @@ stepLoop setNewFrame step st frame = do
       let newFrame = Frame (frameNumber frame + 1) newVdom newFire
       stepLoop setNewFrame step newSt newFrame
 
+
+-- | fireLoop
+--
+--
 -- NOTE:
 -- Don't foregt that STM's (<|>) prefers left(its not fair like mvar).
 -- Because of (1), at (2) `stepedBy` could be already filled even though its in the same STM action.
