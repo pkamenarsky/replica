@@ -116,9 +116,9 @@ instance Exception ContextError
 --
 -- This function will block until:
 --
---   1) Connection/Protocol-wise exception thrown
---   2) Context ends gracefully, returning `Nothing`
---   3) Context ends by exception, returning `Just SomeException`
+--   * Connection/Protocol-wise exception thrown, or
+--   * Context ends gracefully, returning `Nothing`, or
+--   * Context ends by exception, returning `Just SomeException`
 --
 -- Some notes:
 --
