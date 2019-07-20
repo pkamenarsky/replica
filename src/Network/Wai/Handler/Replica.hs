@@ -138,6 +138,3 @@ websocketApp initial step pendingConn = do
           atomically $ writeTVar chan (Just fire)
 
           go conn chan cf (Just newDom) next (serverFrame + 1)
-
-emptyMiddleware :: Middleware
-emptyMiddleware = id
