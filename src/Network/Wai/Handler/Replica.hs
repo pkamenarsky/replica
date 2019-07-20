@@ -22,8 +22,6 @@ import           Network.WebSockets             (ServerApp)
 import           Network.WebSockets.Connection  (ConnectionOptions, Connection, acceptRequest, forkPingThread, receiveData, sendTextData, sendClose, sendCloseCode)
 import           Network.Wai                    (Application, Middleware, responseLBS)
 import           Network.Wai.Handler.WebSockets (websocketsOr)
-import qualified Network.Wai.Middleware.Static as MwS
-import           Network.Wai.Middleware.Static ((>->))
 
 import qualified Replica.VDOM                   as V
 import qualified Replica.VDOM.Render            as R
@@ -141,5 +139,5 @@ websocketApp initial step pendingConn = do
 
           go conn chan cf (Just newDom) next (serverFrame + 1)
 
-defaultMiddleware :: Middleware
-defaultMiddleware = MwS.staticPolicy (MwS.noDots >-> MwS.addBase "static") 
+emptyMiddleware :: Middleware
+emptyMiddleware = id

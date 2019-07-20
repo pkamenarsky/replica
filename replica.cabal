@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 517e2f114ed80596196f03e88231f47e6e4212d5186908254731ee72999677c1
+-- hash: 934c3c818dc54dc66c2f0d09adbc567a3dfdf1eb37bee17e74f6c89b5d672e8c
 
 name:           replica
 version:        0.1.0.0
@@ -51,7 +51,6 @@ library
     , template-haskell
     , text
     , wai
-    , wai-middleware-static
     , wai-websockets
     , websockets
   default-language: Haskell2010
@@ -79,7 +78,6 @@ test-suite replica-test
     , template-haskell
     , text
     , wai
-    , wai-middleware-static
     , wai-websockets
     , websockets
   default-language: Haskell2010

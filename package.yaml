@@ -33,7 +33,6 @@ dependencies:
 - wai
 - websockets
 - wai-websockets
-- wai-middleware-static
 
 library:
   source-dirs: src
