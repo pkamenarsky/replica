@@ -26,7 +26,7 @@ import           Network.HTTP.Types             (status200)
 
 import           Network.WebSockets             (ServerApp)
 import           Network.WebSockets.Connection  (ConnectionOptions, Connection, acceptRequest, forkPingThread, receiveData, sendTextData, sendClose, sendCloseCode)
-import           Network.Wai                    (Application, responseLBS)
+import           Network.Wai                    (Application, Middleware, responseLBS)
 import           Network.Wai.Handler.WebSockets (websocketsOr)
 
 import qualified Replica.VDOM                   as V
@@ -66,11 +66,13 @@ instance A.ToJSON Update where
 app :: forall st.
      V.HTML
   -> ConnectionOptions
+  -> Middleware
   -> st
   -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
   -> Application
-app index options initial step
-  = websocketsOr options (websocketApp initial step) backupApp
+app index options middleware initial step
+  = websocketsOr options (websocketApp initial step) (middleware backupApp)
+
   where
     indexBS = BL.fromStrict $ TE.encodeUtf8 $ TL.toStrict $ TB.toLazyText $ R.renderHTML index
 
