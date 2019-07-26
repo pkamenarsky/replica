@@ -47,7 +47,7 @@ newtype Attrs' a = Attrs { getAttrs :: M.Map T.Text (Attr' a) }
 type Attrs = Attrs' (IO ())
 
 instance Semigroup (Attrs' a) where
-  Attrs m <> Attrs n = Attrs (m <> n)
+  Attrs m <> Attrs n = Attrs (M.unionWith (<>) m n)
 
 instance A.ToJSON (Attrs' a) where
   toJSON (Attrs m) = A.toJSON m
