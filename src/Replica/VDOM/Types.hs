@@ -42,7 +42,7 @@ instance A.ToJSON VDOM where
     ]
 
 newtype Attrs' a = Attrs { getAttrs :: M.Map T.Text (Attr' a) }
-  deriving (Functor, Monoid)
+  deriving (Functor, Monoid, Show)
 
 type Attrs = Attrs' (IO ())
 
@@ -58,6 +58,12 @@ data Attr' a
   | AEvent !(DOMEvent -> a)
   | AMap   !(Attrs' a)
   deriving Functor
+
+instance Show (Attr' a) where
+  show (AText v)  = "(AText " <> T.unpack v <> ")"
+  show (ABool v)  = "(ABool " <> show v <> ")"
+  show (AEvent _) = "AEvent"
+  show (AMap v)   = "(AMap " <> show v <> ")"
 
 type Attr = Attr' (IO ())
 
