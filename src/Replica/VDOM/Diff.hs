@@ -8,7 +8,7 @@ import           Data.Monoid                ((<>))
 import qualified Data.Text                  as T
 import qualified Data.Map                   as M
 import qualified Data.Algorithm.Diff        as D
-import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawText), Attrs, Attr, Attr'(AText,ABool,AEvent,AMap))
+import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawText), Attrs, Attrs'(Attrs, getAttrs), Attr, Attr'(AText,ABool,AEvent,AMap))
 
 t :: T.Text -> T.Text
 t = id
@@ -116,11 +116,11 @@ diff a b = concatMap (uncurry toDiff) (zip vdiffs is)
     eqType Nothing Nothing = True
     eqType _ _ = False
 
-    eqNode (VNode n na _) (VNode m ma _)
+    eqNode (VNode n (Attrs na) _) (VNode m (Attrs ma) _)
       | Just (AText k1) <- key na
       , Just (AText k2) <- key ma = k1 == k2
       | otherwise = n == m && M.lookup "type" na `eqType` M.lookup "type" ma
-    eqNode (VLeaf n na) (VLeaf m ma)
+    eqNode (VLeaf n (Attrs na)) (VLeaf m (Attrs ma))
       | Just (AText k1) <- key na
       , Just (AText k2) <- key ma = k1 == k2
       | otherwise = n == m && M.lookup "type" na `eqType` M.lookup "type" ma
@@ -129,7 +129,7 @@ diff a b = concatMap (uncurry toDiff) (zip vdiffs is)
     eqNode _ _ = False
 
 diffAttrs :: Attrs -> Attrs -> [AttrDiff]
-diffAttrs a b
+diffAttrs (Attrs a) (Attrs b)
   =  fmap DeleteKey (M.keys deleted)
   <> fmap (uncurry InsertKey) (M.assocs inserted)
   <> concatMap diffKey (M.assocs same)
@@ -180,9 +180,9 @@ patch (ReplaceText i n:rds) a = patch rds $ take i a <> [v] <> drop (i + 1) a
 
 patchAttrs :: [AttrDiff] -> Attrs -> Attrs
 patchAttrs [] a                 = a
-patchAttrs (DeleteKey k:ds) a   = patchAttrs ds $ M.delete k a
-patchAttrs (InsertKey k v:ds) a = patchAttrs ds $ M.insert k v a
-patchAttrs (DiffKey k vds:ds) a = patchAttrs ds $ M.adjust (patchVValue vds) k a
+patchAttrs (DeleteKey k:ds) a   = patchAttrs ds $ Attrs $ M.delete k (getAttrs a)
+patchAttrs (InsertKey k v:ds) a = patchAttrs ds $ Attrs $ M.insert k v (getAttrs a)
+patchAttrs (DiffKey k vds:ds) a = patchAttrs ds $ Attrs $ M.adjust (patchVValue vds) k (getAttrs a)
   where
     patchVValue [] v                      = v
     patchVValue (Replace m:vs) _          = patchVValue vs m

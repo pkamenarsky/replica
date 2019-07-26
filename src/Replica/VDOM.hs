@@ -20,7 +20,7 @@ import qualified Data.Text                  as T
 import qualified Data.Text.Encoding         as T
 import qualified Data.Map                   as M
 
-import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawText), Attrs, Attr, Attr'(AText,ABool,AEvent,AMap), DOMEvent)
+import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawText), Attrs, Attrs'(Attrs), Attr, Attr'(AText,ABool,AEvent,AMap), DOMEvent)
 import           Replica.VDOM.Diff          (Diff, AttrDiff, diff, patch, diffAttrs, patchAttrs)
 import           Replica.VDOM.Render        (renderHTML)
 
@@ -30,7 +30,7 @@ t = id
 type Path = [Int]
 
 fireWithAttrs :: Attrs -> T.Text -> DOMEvent -> Maybe (IO ())
-fireWithAttrs attrs evtName evtValue = case M.lookup evtName attrs of
+fireWithAttrs (Attrs attrs) evtName evtValue = case M.lookup evtName attrs of
   Just (AEvent attrEvent) -> Just (attrEvent evtValue)
   _ -> Nothing
 
@@ -63,4 +63,4 @@ defaultIndex title header =
       ]
   ]
   where
-    fl = M.fromList
+    fl = Attrs . M.fromList

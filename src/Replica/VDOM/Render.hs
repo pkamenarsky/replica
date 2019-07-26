@@ -7,7 +7,7 @@ import qualified Data.Text                  as T
 import qualified Data.Text.Lazy.Builder     as TB
 import qualified Data.Map                   as M
 
-import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawText), Attrs, Attr, Attr'(AText,ABool,AEvent,AMap))
+import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawText), Attrs, Attr, Attrs'(getAttrs), Attr'(AText,ABool,AEvent,AMap))
 
 renderHTML :: HTML -> TB.Builder
 renderHTML = mconcat . map renderVDOM
@@ -33,7 +33,7 @@ renderAttrs = foldMap (TB.singleton ' ' <>) . _renderAttrs
     eq = TB.singleton '='
 
     _renderAttrs :: Attrs -> [TB.Builder]
-    _renderAttrs = foldMap (uncurry _renderAttr) . M.toList
+    _renderAttrs = foldMap (uncurry _renderAttr) . M.toList . getAttrs
 
     _renderAttr :: T.Text -> Attr -> [TB.Builder]
     _renderAttr name value = case value of

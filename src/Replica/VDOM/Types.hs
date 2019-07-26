@@ -1,4 +1,6 @@
-{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings          #-}
 
 module Replica.VDOM.Types where
 
@@ -39,14 +41,23 @@ instance A.ToJSON VDOM where
     , "children" .= children
     ]
 
-type Attrs' a = M.Map T.Text (Attr' a)
-type Attrs    = Attrs' (IO ())
+newtype Attrs' a = Attrs { getAttrs :: M.Map T.Text (Attr' a) }
+  deriving (Functor, Monoid)
+
+type Attrs = Attrs' (IO ())
+
+instance Semigroup (Attrs' a) where
+  Attrs m <> Attrs n = Attrs (m <> n)
+
+instance A.ToJSON (Attrs' a) where
+  toJSON (Attrs m) = A.toJSON m
 
 data Attr' a
   = AText  !T.Text
   | ABool  !Bool
   | AEvent !(DOMEvent -> a)
   | AMap   !(Attrs' a)
+  deriving Functor
 
 type Attr = Attr' (IO ())
 
@@ -55,9 +66,9 @@ instance Semigroup (Attr' a) where
   _ <> m = m
 
 instance A.ToJSON (Attr' a) where
-  toJSON (AText v) = A.String v
+  toJSON (AText v)  = A.String v
   toJSON (ABool v)  = A.Bool v
   toJSON (AEvent _) = A.Null
-  toJSON (AMap v)   = A.toJSON $ fmap A.toJSON v
+  toJSON (AMap v)   = A.toJSON v
 
 newtype DOMEvent = DOMEvent { getDOMEvent :: A.Value }
