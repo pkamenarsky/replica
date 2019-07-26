@@ -39,15 +39,22 @@ instance A.ToJSON VDOM where
     , "children" .= children
     ]
 
-type Attrs = M.Map T.Text Attr
+type Attrs' a = M.Map T.Text (Attr' a)
+type Attrs    = Attrs' (IO ())
 
-data Attr
+data Attr' a
   = AText  !T.Text
   | ABool  !Bool
-  | AEvent !(DOMEvent -> IO ())
-  | AMap   !Attrs
+  | AEvent !(DOMEvent -> a)
+  | AMap   !(Attrs' a)
 
-instance A.ToJSON Attr where
+type Attr = Attr' (IO ())
+
+instance Semigroup (Attr' a) where
+  AMap m <> AMap n = AMap (m <> n)
+  _ <> m = m
+
+instance A.ToJSON (Attr' a) where
   toJSON (AText v) = A.String v
   toJSON (ABool v)  = A.Bool v
   toJSON (AEvent _) = A.Null

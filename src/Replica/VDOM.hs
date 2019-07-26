@@ -20,7 +20,7 @@ import qualified Data.Text                  as T
 import qualified Data.Text.Encoding         as T
 import qualified Data.Map                   as M
 
-import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawText), Attrs, Attr(AText,ABool,AEvent,AMap), DOMEvent)
+import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawText), Attrs, Attr, Attr'(AText,ABool,AEvent,AMap), DOMEvent)
 import           Replica.VDOM.Diff          (Diff, AttrDiff, diff, patch, diffAttrs, patchAttrs)
 import           Replica.VDOM.Render        (renderHTML)
 

@@ -8,7 +8,7 @@ import           Data.Monoid                ((<>))
 import qualified Data.Text                  as T
 import qualified Data.Map                   as M
 import qualified Data.Algorithm.Diff        as D
-import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawText), Attrs, Attr(AText,ABool,AEvent,AMap))
+import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawText), Attrs, Attr, Attr'(AText,ABool,AEvent,AMap))
 
 t :: T.Text -> T.Text
 t = id
