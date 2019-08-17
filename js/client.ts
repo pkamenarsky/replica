@@ -109,12 +109,28 @@ function patch(ws: WebSocket, serverFrame: number, diffs: Diff[], parent: Elemen
 
       case 'diff':
         const element: Element = parent.childNodes[diff.index] as Element;
+        const component = element.getAttribute('component');
 
-        for (const adiff of diff.adiff) {
-          patchAttribute(ws, element, false, adiff);
+        if (component) {
+          const callbacks = components.get(component);
+
+          if (callbacks) {
+            for (const adiff of diff.adiff) {
+              callbacks.diffAttr(element, adiff);
+            }
+
+            for (const cdiff of diff.diff) {
+              callbacks.diffChild(element, cdiff);
+            }
+          }
         }
+        else {
+          for (const adiff of diff.adiff) {
+            patchAttribute(ws, element, false, adiff);
+          }
 
-        patch(ws, serverFrame, diff.diff, element);
+          patch(ws, serverFrame, diff.diff, element);
+        }
 
         break;
 
@@ -345,6 +361,7 @@ function patchAttribute(ws: WebSocket, element: any, onProp: boolean, adiff: Att
 
 function buildDOM(ws: WebSocket, dom: DOM, index: number | null, parent: Element): Element {
   let element = null;
+  let callbacks = undefined;
 
   switch (dom.type) {
     case 'text':
@@ -352,23 +369,51 @@ function buildDOM(ws: WebSocket, dom: DOM, index: number | null, parent: Element
       break;
 
     case 'leaf':
-      element = document.createElement(dom.element);
+      callbacks = components.get(dom.element);
 
-      for (const [key, value] of Object.entries(dom.attrs)) {
-        patchAttribute(ws, element, false, { type: 'insert', key, value });
+      if (callbacks !== undefined) {
+        element = document.createElement('div');
+        element.setAttribute('component', dom.element);
+
+        for (const [key, value] of Object.entries(dom.attrs)) {
+          callbacks.diffAttr(element, { type: 'insert', key, value });
+        }
+      }
+      else {
+        element = document.createElement(dom.element);
+
+        for (const [key, value] of Object.entries(dom.attrs)) {
+          patchAttribute(ws, element, false, { type: 'insert', key, value });
+        }
       }
 
       break;
 
     case 'node':
-      element = document.createElement(dom.element);
+      callbacks = components.get(dom.element);
 
-      for (let i = 0; i < dom.children.length; i++) {
-        buildDOM(ws, dom.children[i], null, element);
+      if (callbacks !== undefined) {
+        element = document.createElement('div');
+        element.setAttribute('component', dom.element);
+
+        for (let i = 0; i < dom.children.length; i++) {
+          callbacks.diffChild(element, {type: 'insert', index: i, dom: dom.children[i]});
+        }
+
+        for (const [key, value] of Object.entries(dom.attrs)) {
+          callbacks.diffAttr(element, { type: 'insert', key, value });
+        }
       }
+      else {
+        element = document.createElement(dom.element);
 
-      for (const [key, value] of Object.entries(dom.attrs)) {
-        patchAttribute(ws, element, false, { type: 'insert', key, value });
+        for (let i = 0; i < dom.children.length; i++) {
+          buildDOM(ws, dom.children[i], null, element);
+        }
+
+        for (const [key, value] of Object.entries(dom.attrs)) {
+          patchAttribute(ws, element, false, { type: 'insert', key, value });
+        }
       }
 
       break;
@@ -445,3 +490,16 @@ function connect() {
 }
 
 connect();
+
+// -----------------------------------------------------------------------------
+
+const components: Map<string, ComponentCallbacks> = new Map();
+
+type ComponentCallbacks = {
+  diffChild(domNode: Node, diff: Diff): void,
+  diffAttr(domeNode: Node, diff: AttrDiff): void
+};
+
+function registerComponent(name: string, callbacks: ComponentCallbacks) {
+  components.set(name, callbacks);
+}
