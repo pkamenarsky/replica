@@ -55,12 +55,15 @@ defaultIndex title header =
   [ VLeaf "meta" (fl [("charset", AText "utf-8")])
   , VLeaf "!doctype" (fl [("html", ABool True)])
   , VNode "html" mempty
-      [ VNode "head" mempty ([VNode "title" mempty [VText title]] <> header)
-      , VNode "body" mempty
-          [ VNode "script" (fl [("language", AText "javascript")])
-              [ VRawText $ T.decodeUtf8 clientDriver ]
-          ]
+      [ VNode "head" mempty headerDOM
+      , VNode "body" mempty []
       ]
   ]
   where
+    headerDOM =
+      [ VNode "title" mempty [VText title]
+      , VNode "script" (fl [("language", AText "javascript")])
+          [ VRawText $ T.decodeUtf8 clientDriver ]
+      ] <> header
+
     fl = Attrs . M.fromList

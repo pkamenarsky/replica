@@ -1,4 +1,11 @@
 "use strict";
+// -----------------------------------------------------------------------------
+const components = new Map();
+const registeredComponents = new Map();
+window['registerComponent'] = function (name, callbacks) {
+    registeredComponents.set(name, callbacks);
+};
+// -----------------------------------------------------------------------------
 const MAX_FRAMES = 20;
 let serverFrame = 0;
 let clientFrame = null;
@@ -34,10 +41,24 @@ function patch(ws, serverFrame, diffs, parent) {
                 break;
             case 'diff':
                 const element = parent.childNodes[diff.index];
-                for (const adiff of diff.adiff) {
-                    patchAttribute(ws, element, false, adiff);
+                const component = element.getAttribute('component');
+                if (component) {
+                    const callbacks = components.get(component);
+                    if (callbacks) {
+                        for (const adiff of diff.adiff) {
+                            callbacks.patchAttribute(element, adiff);
+                        }
+                        for (const cdiff of diff.diff) {
+                            callbacks.patchChild(element, cdiff);
+                        }
+                    }
                 }
-                patch(ws, serverFrame, diff.diff, element);
+                else {
+                    for (const adiff of diff.adiff) {
+                        patchAttribute(ws, element, false, adiff);
+                    }
+                    patch(ws, serverFrame, diff.diff, element);
+                }
                 break;
             case 'replace_text':
                 const text = parent.childNodes[diff.index];
@@ -79,6 +100,12 @@ function getElementPath(el) {
     return path;
 }
 const listeners = new Map();
+const predictedEvents = [
+    'input',
+    'keydown',
+    'keyup',
+    'keypress'
+];
 function setEventListener(ws, element, name) {
     const eventName = name.substring(2).toLowerCase();
     const listener = (event) => {
@@ -88,7 +115,7 @@ function setEventListener(ws, element, name) {
             path: getElementPath(element),
             clientFrame: serverFrame,
         };
-        if (eventName === 'input') {
+        if (predictedEvents.includes(eventName)) {
             addFrame(element, serverFrame, 'value', event.target.value);
         }
         ws.send(JSON.stringify(msg));
@@ -227,23 +254,47 @@ function patchAttribute(ws, element, onProp, adiff) {
 }
 function buildDOM(ws, dom, index, parent) {
     let element = null;
+    let callbacks = undefined;
     switch (dom.type) {
         case 'text':
             element = document.createTextNode(dom.text);
             break;
         case 'leaf':
-            element = document.createElement(dom.element);
-            for (const [key, value] of Object.entries(dom.attrs)) {
-                patchAttribute(ws, element, false, { type: 'insert', key, value });
+            callbacks = components.get(dom.element);
+            if (callbacks !== undefined) {
+                element = document.createElement('div');
+                element.setAttribute('component', dom.element);
+                for (const [key, value] of Object.entries(dom.attrs)) {
+                    callbacks.patchAttribute(element, { type: 'insert', key, value });
+                }
+            }
+            else {
+                element = document.createElement(dom.element);
+                for (const [key, value] of Object.entries(dom.attrs)) {
+                    patchAttribute(ws, element, false, { type: 'insert', key, value });
+                }
             }
             break;
         case 'node':
-            element = document.createElement(dom.element);
-            for (let i = 0; i < dom.children.length; i++) {
-                buildDOM(ws, dom.children[i], null, element);
+            callbacks = components.get(dom.element);
+            if (callbacks !== undefined) {
+                element = document.createElement('div');
+                element.setAttribute('component', dom.element);
+                for (let i = 0; i < dom.children.length; i++) {
+                    callbacks.patchChild(element, { type: 'insert', index: i, dom: dom.children[i] });
+                }
+                for (const [key, value] of Object.entries(dom.attrs)) {
+                    callbacks.patchAttribute(element, { type: 'insert', key, value });
+                }
             }
-            for (const [key, value] of Object.entries(dom.attrs)) {
-                patchAttribute(ws, element, false, { type: 'insert', key, value });
+            else {
+                element = document.createElement(dom.element);
+                for (let i = 0; i < dom.children.length; i++) {
+                    buildDOM(ws, dom.children[i], null, element);
+                }
+                for (const [key, value] of Object.entries(dom.attrs)) {
+                    patchAttribute(ws, element, false, { type: 'insert', key, value });
+                }
             }
             break;
     }
@@ -266,6 +317,18 @@ function connect() {
     let root = document.createElement('div');
     const port = window.location.port ? window.location.port : (window.location.protocol === 'http' ? 80 : 443);
     const ws = new WebSocket("ws://" + window.location.hostname + ":" + port);
+    for (const [name, register] of registeredComponents.entries()) {
+        const callbacks = register((event) => {
+            const msg = {
+                eventType: event.eventType,
+                event: event.event,
+                path: getElementPath(event.element),
+                clientFrame: serverFrame,
+            };
+            ws.send(JSON.stringify(msg));
+        });
+        components.set(name, callbacks);
+    }
     document.body.appendChild(root);
     ws.onmessage = (event) => {
         const update = JSON.parse(event.data);
@@ -303,4 +366,4 @@ function connect() {
         }
     };
 }
-connect();
+document.addEventListener('DOMContentLoaded', () => connect());

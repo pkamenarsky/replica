@@ -63,6 +63,24 @@ type Update = {
   diff: Diff[]
 };
 
+// -----------------------------------------------------------------------------
+
+const components: Map<string, Callbacks> = new Map();
+const registeredComponents: Map<string, ComponentCallbacks> = new Map();
+
+type Callbacks = {
+  patchChild(domNode: Node, diff: Diff): void,
+  patchAttribute(domNode: Node, diff: AttrDiff): void
+};
+
+type ComponentCallbacks = (sendEvent: (event: SerializedEvent) => void) => Callbacks;
+
+(window as any)['registerComponent'] = function(name: string, callbacks: ComponentCallbacks) {
+  registeredComponents.set(name, callbacks);
+}
+
+// -----------------------------------------------------------------------------
+
 const MAX_FRAMES = 20;
 let serverFrame = 0;
 let clientFrame: number | null = null;
@@ -116,11 +134,11 @@ function patch(ws: WebSocket, serverFrame: number, diffs: Diff[], parent: Elemen
 
           if (callbacks) {
             for (const adiff of diff.adiff) {
-              callbacks.diffAttr(element, adiff);
+              callbacks.patchAttribute(element, adiff);
             }
 
             for (const cdiff of diff.diff) {
-              callbacks.diffChild(element, cdiff);
+              callbacks.patchChild(element, cdiff);
             }
           }
         }
@@ -183,6 +201,19 @@ function getElementPath(el: Element): number[] {
 
 const listeners: Map<Element, Map<string, EventListener>> = new Map();
 
+const predictedEvents = [
+  'input',
+  'keydown',
+  'keyup',
+  'keypress'
+];
+
+type SerializedEvent = {
+  eventType: string,
+  event: any,
+  element: Node
+};
+
 function setEventListener(ws: WebSocket, element: Element, name: string) {
   const eventName = name.substring(2).toLowerCase();
 
@@ -194,7 +225,7 @@ function setEventListener(ws: WebSocket, element: Element, name: string) {
       clientFrame: serverFrame,
     };
 
-    if (eventName === 'input') {
+    if (predictedEvents.includes(eventName)) {
       addFrame(element, serverFrame, 'value', (event.target as any).value);
     }
 
@@ -376,7 +407,7 @@ function buildDOM(ws: WebSocket, dom: DOM, index: number | null, parent: Element
         element.setAttribute('component', dom.element);
 
         for (const [key, value] of Object.entries(dom.attrs)) {
-          callbacks.diffAttr(element, { type: 'insert', key, value });
+          callbacks.patchAttribute(element, { type: 'insert', key, value });
         }
       }
       else {
@@ -397,11 +428,11 @@ function buildDOM(ws: WebSocket, dom: DOM, index: number | null, parent: Element
         element.setAttribute('component', dom.element);
 
         for (let i = 0; i < dom.children.length; i++) {
-          callbacks.diffChild(element, {type: 'insert', index: i, dom: dom.children[i]});
+          callbacks.patchChild(element, {type: 'insert', index: i, dom: dom.children[i]});
         }
 
         for (const [key, value] of Object.entries(dom.attrs)) {
-          callbacks.diffAttr(element, { type: 'insert', key, value });
+          callbacks.patchAttribute(element, { type: 'insert', key, value });
         }
       }
       else {
@@ -442,6 +473,21 @@ function connect() {
 
   const port = window.location.port ? window.location.port : (window.location.protocol === 'http' ? 80 : 443);
   const ws = new WebSocket("ws://" + window.location.hostname + ":" + port);
+
+  for (const [name, register] of registeredComponents.entries()) {
+    const callbacks = register((event: SerializedEvent) => {
+      const msg = {
+        eventType: event.eventType,
+        event: event.event,
+        path: getElementPath(event.element as any),
+        clientFrame: serverFrame,
+      };
+
+      ws.send(JSON.stringify(msg));
+    });
+
+    components.set(name, callbacks);
+  }
 
   document.body.appendChild(root);
 
@@ -489,17 +535,4 @@ function connect() {
   };
 }
 
-connect();
-
-// -----------------------------------------------------------------------------
-
-const components: Map<string, ComponentCallbacks> = new Map();
-
-type ComponentCallbacks = {
-  diffChild(domNode: Node, diff: Diff): void,
-  diffAttr(domeNode: Node, diff: AttrDiff): void
-};
-
-function registerComponent(name: string, callbacks: ComponentCallbacks) {
-  components.set(name, callbacks);
-}
+document.addEventListener('DOMContentLoaded', () => connect());
