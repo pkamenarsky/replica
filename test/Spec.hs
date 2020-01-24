@@ -47,7 +47,7 @@ instance Arbitrary VDOM where
   arbitrary = do
     t <- choose (0, 1) :: Gen Int
     case t of
-      0 -> VNode <$> arbitrary <*> arbitrary <*> arbitrary
+      0 -> VNode <$> arbitrary <*> arbitrary <*> pure Nothing <*> arbitrary
       -- 1 -> VLeaf <$> arbitrary <*> arbitrary
       1 -> VText <$> arbitrary
 

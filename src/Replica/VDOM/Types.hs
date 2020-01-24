@@ -12,9 +12,11 @@ t = id
 
 type HTML = [VDOM]
 
+newtype Namespace = Namespace { getNamespace :: T.Text } deriving (Eq, Ord, Show)
+
 data VDOM
-  = VNode    !T.Text !Attrs ![VDOM]
-  | VLeaf    !T.Text !Attrs
+  = VNode    !T.Text !Attrs !(Maybe Namespace) ![VDOM]
+  | VLeaf    !T.Text !Attrs !(Maybe Namespace)
   | VText    !T.Text
   | VRawText !T.Text
 
@@ -27,17 +29,17 @@ instance A.ToJSON VDOM where
     [ "type" .= t "text"
     , "text" .= text
     ]
-  toJSON (VLeaf element attrs) = A.object
+  toJSON (VLeaf element attrs mNamespace) = A.object $
     [ "type"    .= t "leaf"
     , "element" .= element
     , "attrs"   .= attrs
-    ]
-  toJSON (VNode element attrs children) = A.object
+    ] <> maybe [] (\ns -> ["namespace" .= getNamespace ns]) mNamespace
+  toJSON (VNode element attrs mNamespace children) = A.object $
     [ "type"     .= t "node"
     , "element"  .= element
     , "attrs"    .= attrs
     , "children" .= children
-    ]
+    ] <> maybe [] (\ns -> ["namespace" .= getNamespace ns]) mNamespace
 
 type Attrs = M.Map T.Text Attr
 

@@ -8,7 +8,7 @@ import           Data.Monoid                ((<>))
 import qualified Data.Text                  as T
 import qualified Data.Map                   as M
 import qualified Data.Algorithm.Diff        as D
-import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawText), Attrs, Attr(AText,ABool,AEvent,AMap))
+import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawText), Attrs, Attr(AText,ABool,AEvent,AMap), Namespace(getNamespace))
 
 t :: T.Text -> T.Text
 t = id
@@ -16,7 +16,7 @@ t = id
 data Diff
   = Delete !Int
   | Insert !Int !VDOM
-  | Diff !Int ![AttrDiff] ![Diff]
+  | Diff !Int ![AttrDiff] !(Maybe Namespace) ![Diff]
   | ReplaceText !Int !T.Text
 
 instance A.ToJSON Diff where
@@ -29,12 +29,12 @@ instance A.ToJSON Diff where
     , "dom"   .= v
     , "index" .= i
     ]
-  toJSON (Diff i ads ds) = A.object
+  toJSON (Diff i ads mNs ds) = A.object $
     [ "type"  .= t "diff"
     , "diff"  .= ds
     , "adiff" .= ads
     , "index" .= i
-    ]
+    ] <> maybe [] (\ns -> ["namespace" .= getNamespace ns]) mNs
   toJSON (ReplaceText i text) = A.object
     [ "type"  .= t "replace_text"
     , "index" .= i
@@ -79,6 +79,7 @@ instance A.ToJSON KeyDiff where
 diff :: HTML -> HTML -> [Diff]
 diff a b = concatMap (uncurry toDiff) (zip vdiffs is)
   where
+    go :: Int -> [D.Diff a] -> [Int]
     go i (D.First _:ds) = i:go i ds
     go i (_:ds) = i:go (i + 1) ds
     go _ [] = []
@@ -89,15 +90,15 @@ diff a b = concatMap (uncurry toDiff) (zip vdiffs is)
     toDiff :: D.Diff VDOM -> Int -> [Diff]
     toDiff (D.First _) i  = [Delete i]
     toDiff (D.Second v) i = [Insert i v]
-    toDiff (D.Both (VNode _ ca c) (VNode _ da d)) i
-      | null das && null ds = []
-      | otherwise           = [Diff i (diffAttrs ca da) (diff c d)]
+    toDiff (D.Both (VNode _ ca cNs c) (VNode _ da dNs d)) i
+      | null das && null ds && cNs == dNs = []
+      | otherwise                         = [Diff i (diffAttrs ca da) dNs (diff c d)]
       where
         das = diffAttrs ca da
         ds  = diff c d
-    toDiff (D.Both (VLeaf _ ca) (VLeaf _ da)) i
-      | null das  = []
-      | otherwise = [Diff i (diffAttrs ca da) []]
+    toDiff (D.Both (VLeaf _ ca cNs) (VLeaf _ da dNs)) i
+      | null das && cNs == dNs = []
+      | otherwise = [Diff i (diffAttrs ca da) dNs []]
       where
         das = diffAttrs ca da
     toDiff (D.Both (VText m) (VText n)) i
@@ -116,14 +117,14 @@ diff a b = concatMap (uncurry toDiff) (zip vdiffs is)
     eqType Nothing Nothing = True
     eqType _ _ = False
 
-    eqNode (VNode n na _) (VNode m ma _)
+    eqNode (VNode n na nNs _) (VNode m ma mNs _)
       | Just (AText k1) <- key na
       , Just (AText k2) <- key ma = k1 == k2
-      | otherwise = n == m && M.lookup "type" na `eqType` M.lookup "type" ma
-    eqNode (VLeaf n na) (VLeaf m ma)
+      | otherwise = n == m && nNs == mNs && M.lookup "type" na `eqType` M.lookup "type" ma
+    eqNode (VLeaf n na nNs) (VLeaf m ma mNs)
       | Just (AText k1) <- key na
       , Just (AText k2) <- key ma = k1 == k2
-      | otherwise = n == m && M.lookup "type" na `eqType` M.lookup "type" ma
+      | otherwise = n == m && nNs == mNs && M.lookup "type" na `eqType` M.lookup "type" ma
     eqNode (VText _) (VText _) = True
     eqNode (VRawText _) (VRawText _) = True
     eqNode _ _ = False
@@ -164,13 +165,13 @@ patch :: [Diff] -> HTML -> HTML
 patch [] a                  = a
 patch (Delete i:rds) a      = patch rds $ take i a <> drop (i + 1) a
 patch (Insert i v:rds) a    = patch rds $ take i a <> [v] <> drop i a
-patch (Diff i ads ds:rds) a = patch rds $ take i a <> [v] <> drop (i + 1) a
+patch (Diff i ads ns ds:rds) a = patch rds $ take i a <> [v] <> drop (i + 1) a
   where
     v = case a !! i of
-      VNode e as cs -> VNode e (patchAttrs ads as) (patch ds cs)
-      VLeaf e as    -> VLeaf e (patchAttrs ads as)
-      VText _       -> error "Can't node patch text"
-      VRawText _    -> error "Can't node patch text"
+      VNode e as _ cs -> VNode e (patchAttrs ads as) ns (patch ds cs)
+      VLeaf e as _    -> VLeaf e (patchAttrs ads as) ns
+      VText _          -> error "Can't node patch text"
+      VRawText _       -> error "Can't node patch text"
 patch (ReplaceText i n:rds) a = patch rds $ take i a <> [v] <> drop (i + 1) a
   where
     v = case a !! i of
