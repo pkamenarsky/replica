@@ -177,7 +177,7 @@ function setAttribute(ws, element, onProp, attr, value) {
     }
 }
 function setAttributeWithNS(element, attr, value) {
-    const ns = element.getAttributeNS();
+    const ns = element.namespaceURI;
     ns ? element.setAttributeNS(ns, attr, value) : element.setAttribute(attr, value);
 }
 function removeAttribute(element, onProp, attr) {

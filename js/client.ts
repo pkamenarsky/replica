@@ -288,7 +288,7 @@ function setAttribute(ws: WebSocket, element: any, onProp: boolean, attr: string
 }
 
 function setAttributeWithNS(element: any, attr: string, value: string) {
-  const ns = element.getAttributeNS();
+  const ns = element.namespaceURI;
   ns ? element.setAttributeNS(ns, attr, value) : element.setAttribute(attr, value);
 }
 
