@@ -157,13 +157,13 @@ function setAttribute(ws, element, onProp, attr, value) {
                 }
             }
             else if (value === true) {
-                element.setAttribute(attr, "");
+                setAttributeWithNS(element, attr, "");
             }
             else if (value === false) {
                 element.removeAttribute(attr);
             }
             else if (typeof value === 'string') {
-                element.setAttribute(attr, value);
+                setAttributeWithNS(element, attr, value);
             }
             else if (typeof value === 'object') {
                 for (const [k, v] of Object.entries(value)) {
@@ -175,6 +175,10 @@ function setAttribute(ws, element, onProp, attr, value) {
             setTimeout(() => element.focus(), 0);
         }
     }
+}
+function setAttributeWithNS(element, attr, value) {
+    const ns = element.getAttributeNS();
+    ns ? element.setAttributeNS(ns, attr, value) : element.setAttribute(attr, value);
 }
 function removeAttribute(element, onProp, attr) {
     if (onProp) {
