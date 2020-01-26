@@ -48,7 +48,6 @@ type Diff = {
   type: 'diff',
   index: number,
   adiff: AttrDiff[],
-  namespace?: string,
   diff: Diff[]
 } | {
   type: 'replace_text',
