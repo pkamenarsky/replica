@@ -47,7 +47,7 @@ instance Arbitrary VDOM where
   arbitrary = do
     t <- choose (0, 1) :: Gen Int
     case t of
-      0 -> VNode <$> arbitrary <*> arbitrary <*> pure Nothing <*> arbitrary
+      0 -> VNode <$> arbitrary <*> arbitrary <*> namespace <*> arbitrary
       -- 1 -> VLeaf <$> arbitrary <*> arbitrary
       1 -> VText <$> arbitrary
 
@@ -57,6 +57,13 @@ propDiff a b = patch (diff a b) a == b
 quickCheckDiff a b = quickCheckWith args propDiff
   where
     args = stdArgs { maxSize = a, maxSuccess = b }
+
+namespace :: Gen (Maybe Namespace)
+namespace = do
+  t <- choose (0, 1) :: Gen Int
+  case t of
+    0 -> pure Nothing
+    1 -> pure $ Just $ Namespace (T.pack "http://www.w3.org/2000/svg")
 
 --------------------------------------------------------------------------------
 
