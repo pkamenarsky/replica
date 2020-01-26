@@ -266,13 +266,13 @@ function setAttribute(ws: WebSocket, element: any, onProp: boolean, attr: string
         }
       }
       else if (value === true) {
-        setAttributeWithNS(element, attr, "");
+        element.setAttribute(attr, "");
       }
       else if (value === false) {
         element.removeAttribute(attr);
       }
       else if (typeof value === 'string') {
-        setAttributeWithNS(element, attr, value);
+        element.setAttribute(attr, value);
       }
       else if (typeof value === 'object') {
         for (const [k, v] of Object.entries(value)) {
@@ -285,11 +285,6 @@ function setAttribute(ws: WebSocket, element: any, onProp: boolean, attr: string
       setTimeout(() => element.focus(), 0);
     }
   }
-}
-
-function setAttributeWithNS(element: any, attr: string, value: string) {
-  const ns = element.namespaceURI;
-  ns ? element.setAttributeNS(ns, attr, value) : element.setAttribute(attr, value);
 }
 
 function removeAttribute(element: any, onProp: boolean, attr: string) {
