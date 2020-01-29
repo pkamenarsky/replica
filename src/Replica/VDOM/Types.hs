@@ -30,16 +30,18 @@ instance A.ToJSON VDOM where
     , "text" .= text
     ]
   toJSON (VLeaf element attrs mNamespace) = A.object $
-    [ "type"    .= t "leaf"
-    , "element" .= element
-    , "attrs"   .= attrs
-    ] <> maybe [] (\ns -> ["namespace" .= getNamespace ns]) mNamespace
+    [ "type"      .= t "leaf"
+    , "element"   .= element
+    , "attrs"     .= attrs
+    , "namespace" .= fmap getNamespace mNamespace
+    ]
   toJSON (VNode element attrs mNamespace children) = A.object $
-    [ "type"     .= t "node"
-    , "element"  .= element
-    , "attrs"    .= attrs
-    , "children" .= children
-    ] <> maybe [] (\ns -> ["namespace" .= getNamespace ns]) mNamespace
+    [ "type"      .= t "node"
+    , "element"   .= element
+    , "attrs"     .= attrs
+    , "children"  .= children
+    , "namespace" .= fmap getNamespace mNamespace
+    ]
 
 type Attrs = M.Map T.Text Attr
 

@@ -5,12 +5,12 @@ type DOM = {
   type: 'leaf',
   attrs: { [key: string]: string | null },
   element: string,
-  namespace?: string
+  namespace: string | null
 } | {
   type: 'node',
   attrs: { [key: string]: string | null },
   element: string,
-  namespace?: string,
+  namespace: string | null,
   children: DOM[]
 };
 
