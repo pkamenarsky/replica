@@ -20,7 +20,7 @@ import qualified Data.Text                  as T
 import qualified Data.Text.Encoding         as T
 import qualified Data.Map                   as M
 
-import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawText), Attrs, Attr(AText,ABool,AEvent,AMap), DOMEvent)
+import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawText), Attrs, Attr(AText,ABool,AEvent,AMap), DOMEvent, Namespace(Namespace, getNamespace))
 import           Replica.VDOM.Diff          (Diff, AttrDiff, diff, patch, diffAttrs, patchAttrs)
 import           Replica.VDOM.Render        (renderHTML)
 
@@ -40,9 +40,9 @@ fireEvent ds (x:xs) = if x < length ds
   then fireEventOnNode (ds !! x) xs
   else \_ _ -> Nothing
   where
-    fireEventOnNode (VNode _ attrs _) []        = fireWithAttrs attrs
-    fireEventOnNode (VLeaf _ attrs) []          = fireWithAttrs attrs
-    fireEventOnNode (VNode _ _ children) (p:ps) = if p < length children
+    fireEventOnNode (VNode _ attrs _ns _) []        = fireWithAttrs attrs
+    fireEventOnNode (VLeaf _ attrs _ns) []          = fireWithAttrs attrs
+    fireEventOnNode (VNode _ _ _ns children) (p:ps) = if p < length children
       then fireEventOnNode (children !! p) ps
       else \_ _ -> Nothing
     fireEventOnNode _ _                         = \_ _ -> Nothing
@@ -52,12 +52,12 @@ clientDriver = $(FE.embedFile "./js/dist/client.js")
 
 defaultIndex :: T.Text -> HTML -> HTML
 defaultIndex title header =
-  [ VLeaf "meta" (fl [("charset", AText "utf-8")])
-  , VLeaf "!doctype" (fl [("html", ABool True)])
-  , VNode "html" mempty
-      [ VNode "head" mempty ([VNode "title" mempty [VText title]] <> header)
-      , VNode "body" mempty
-          [ VNode "script" (fl [("language", AText "javascript")])
+  [ VLeaf "meta" (fl [("charset", AText "utf-8")]) Nothing
+  , VLeaf "!doctype" (fl [("html", ABool True)]) Nothing
+  , VNode "html" mempty Nothing
+      [ VNode "head" mempty Nothing ([VNode "title" mempty Nothing [VText title]] <> header)
+      , VNode "body" mempty Nothing
+          [ VNode "script" (fl [("language", AText "javascript")]) Nothing
               [ VRawText $ T.decodeUtf8 clientDriver ]
           ]
       ]
