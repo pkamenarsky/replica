@@ -87,7 +87,7 @@ For finer grained integration, there's `Network.Wai.Handler.Replica.websocketApp
 
 * Hackage documentation
 * Initial server-side rendering
-* SVG support
+* ~SVG support~ ([@seagreen](https://github.com/seagreen))
 * Better diffing algorithm
 * Lifecycle events and animation hooks
 * `onMouseDrag` event
