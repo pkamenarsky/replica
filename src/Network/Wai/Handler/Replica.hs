@@ -11,6 +11,8 @@ import           Control.Exception              (SomeException(SomeException), e
 import           Data.Aeson                     ((.:), (.=))
 import qualified Data.Aeson                     as A
 
+import           Data.IORef                     (newIORef, atomicModifyIORef', readIORef)
+
 import qualified Data.ByteString.Lazy           as BL
 import qualified Data.Text                      as T
 import qualified Data.Text.Encoding             as TE
@@ -138,3 +140,62 @@ websocketApp initial step pendingConn = do
           atomically $ writeTVar chan (Just fire)
 
           go conn chan cf (Just newDom) next (serverFrame + 1)
+
+app'
+  :: V.HTML
+  -> ConnectionOptions
+  -> Middleware
+  -> IO (IO V.HTML, Event -> IO ())
+  -> Application
+app' index options middleware spawn
+  = websocketsOr options (websocketApp' spawn) (middleware backupApp)
+
+  where
+    indexBS = BL.fromStrict $ TE.encodeUtf8 $ TL.toStrict $ TB.toLazyText $ R.renderHTML index
+
+    backupApp :: Application
+    backupApp _ respond = respond $ responseLBS status200 [("content-type", "text/html")] indexBS
+
+websocketApp'
+  :: IO (IO V.HTML, Event -> IO ())
+  -> ServerApp
+websocketApp' spawn pendingConn = do
+  conn <- acceptRequest pendingConn
+  cf   <- newIORef Nothing
+
+  forkPingThread conn 30
+
+  (next, emit) <- spawn
+
+  tid <- forkIO $ forever $ do
+    msg <- receiveData conn
+    case A.decode msg of
+      Just msg' -> do
+        atomicModifyIORef' cf $ \_ -> (Just $ evtClientFrame msg', ())
+        emit msg'
+      Nothing -> traceIO $ "Couldn't decode event: " <> show msg
+
+  r <- try $ go' conn next Nothing cf 0
+
+  case r of
+    Left (SomeException e) -> sendCloseCode conn closeCodeInternalError (T.pack $ show e)
+    Right _ -> sendClose conn ("done" :: T.Text)
+
+  killThread tid
+
+  where
+    closeCodeInternalError = 1011
+
+    go' conn next oldDom cf serverFrame = do
+      newDom <- next
+
+      case oldDom of
+        Nothing      -> do
+          sendTextData conn $ A.encode $ ReplaceDOM newDom
+        Just oldDom' -> do
+          -- Throw exceptions here
+          diff <- evaluate (V.diff oldDom' newDom)
+          clientFrame <- readIORef cf
+          sendTextData conn $ A.encode $ UpdateDOM serverFrame clientFrame diff
+
+      go' conn next (Just newDom) cf (serverFrame + 1)
