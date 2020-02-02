@@ -4,11 +4,13 @@ type DOM = {
 } | {
   type: 'leaf',
   attrs: { [key: string]: string | null },
-  element: string
+  element: string,
+  namespace: string | null
 } | {
   type: 'node',
   attrs: { [key: string]: string | null },
   element: string,
+  namespace: string | null,
   children: DOM[]
 };
 
@@ -352,7 +354,7 @@ function buildDOM(ws: WebSocket, dom: DOM, index: number | null, parent: Element
       break;
 
     case 'leaf':
-      element = document.createElement(dom.element);
+      element = dom.namespace ? document.createElementNS(dom.namespace, dom.element) : document.createElement(dom.element);
 
       for (const [key, value] of Object.entries(dom.attrs)) {
         patchAttribute(ws, element, false, { type: 'insert', key, value });
@@ -361,7 +363,7 @@ function buildDOM(ws: WebSocket, dom: DOM, index: number | null, parent: Element
       break;
 
     case 'node':
-      element = document.createElement(dom.element);
+      element = dom.namespace ? document.createElementNS(dom.namespace, dom.element) : document.createElement(dom.element);
 
       for (let i = 0; i < dom.children.length; i++) {
         buildDOM(ws, dom.children[i], null, element);
