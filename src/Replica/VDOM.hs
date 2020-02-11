@@ -52,10 +52,13 @@ clientDriver = $(FE.embedFile "./js/dist/client.js")
 
 defaultIndex :: T.Text -> HTML -> HTML
 defaultIndex title header =
-  [ VLeaf "meta" (fl [("charset", AText "utf-8")]) Nothing
-  , VLeaf "!doctype" (fl [("html", ABool True)]) Nothing
+  [ VLeaf "!doctype" (fl [("html", ABool True)]) Nothing
   , VNode "html" mempty Nothing
-      [ VNode "head" mempty Nothing ([VNode "title" mempty Nothing [VText title]] <> header)
+      [ VNode "head" mempty Nothing $
+          [ VLeaf "meta" (fl [("charset", AText "utf-8")]) Nothing
+          , VNode "title" mempty Nothing [VText title]
+          ]
+          <> header
       , VNode "body" mempty Nothing
           [ VNode "script" (fl [("language", AText "javascript")]) Nothing
               [ VRawText $ T.decodeUtf8 clientDriver ]
