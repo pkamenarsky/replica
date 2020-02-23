@@ -63,6 +63,10 @@ type Update = {
   serverFrame: number,
   clientFrame: number | null,
   diff: Diff[]
+} | {
+  type: 'call',
+  arg: any,
+  js: string
 };
 
 const MAX_FRAMES = 20;
@@ -174,6 +178,7 @@ function setEventListener(ws: WebSocket, element: Element, name: string) {
 
   const listener = (event: any) => {
     const msg = {
+      type: 'event',
       eventType: name,
       event: JSON.parse(stringifyEvent(event)),
       path: getElementPath(element),
@@ -402,6 +407,16 @@ function connect() {
 
   document.body.appendChild(root);
 
+  (window as any)['callCallback'] = (cbId: number, arg: any) => {
+    const msg = {
+      type: 'call',
+      arg,
+      id: cbId
+    };
+
+    ws.send(JSON.stringify(msg));
+  };
+
   ws.onmessage = (event) => {
     const update: Update = JSON.parse(event.data);
 
@@ -427,6 +442,11 @@ function connect() {
           patch(ws, update.serverFrame, update.diff, root);
         }
 
+        break;
+
+      case 'call':
+        const f = new Function("arg", update.js);
+        f(update.arg);
         break;
     }
   };

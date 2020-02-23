@@ -1,5 +1,7 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 
 module Network.Wai.Handler.Replica where
 
@@ -10,8 +12,10 @@ import           Control.Exception              (SomeException(SomeException), e
 
 import           Data.Aeson                     ((.:), (.=))
 import qualified Data.Aeson                     as A
+import           Data.IORef                     (newIORef, atomicModifyIORef', readIORef)
 
 import qualified Data.ByteString.Lazy           as BL
+import qualified Data.Map                       as M
 import qualified Data.Text                      as T
 import qualified Data.Text.Encoding             as TE
 import qualified Data.Text.Lazy                 as TL
@@ -28,24 +32,35 @@ import qualified Replica.VDOM.Render            as R
 
 import           Debug.Trace                    (traceIO)
 
-data Event = Event
-  { evtType        :: T.Text
-  , evtEvent       :: A.Value
-  , evtPath        :: [Int]
-  , evtClientFrame :: Int
-  } deriving Show
+data Event
+  = Event
+      { evtType        :: T.Text
+      , evtEvent       :: A.Value
+      , evtPath        :: [Int]
+      , evtClientFrame :: Int
+      }
+  | CallCallback A.Value Int
+  deriving Show
 
 instance A.FromJSON Event where
-  parseJSON (A.Object o) = Event
-    <$> o .: "eventType"
-    <*> o .: "event"
-    <*> o .: "path"
-    <*> o .: "clientFrame"
+  parseJSON (A.Object o) = do
+    t <- o .: "type"
+    case (t :: T.Text) of
+      "event" -> Event
+        <$> o .: "eventType"
+        <*> o .: "event"
+        <*> o .: "path"
+        <*> o .: "clientFrame"
+      "call" -> CallCallback
+        <$> o .: "arg"
+        <*> o .: "id"
+      _ -> fail "Expected \"type\" == \"event\" | \"call\""
   parseJSON _ = fail "Expected object"
 
 data Update
   = ReplaceDOM V.HTML
   | UpdateDOM Int (Maybe Int) [V.Diff]
+  | Call A.Value T.Text
 
 instance A.ToJSON Update where
   toJSON (ReplaceDOM dom) = A.object
@@ -58,13 +73,27 @@ instance A.ToJSON Update where
     , "clientFrame" .= clientFrame
     , "diff" .= ddiff
     ]
+  toJSON (Call arg js) = A.object
+    [ "type" .= V.t "call"
+    , "arg"  .= arg
+    , "js"   .= js
+    ]
+
+newtype Callback = Callback Int
+  deriving (Eq, A.ToJSON, A.FromJSON)
+
+data Context = Context
+  { registerCallback   :: forall a. A.FromJSON a => (a -> IO ()) -> IO Callback
+  , unregisterCallback :: Callback -> IO ()
+  , call               :: forall a. A.ToJSON a => a -> T.Text -> IO ()
+  }
 
 app :: forall st.
      V.HTML
   -> ConnectionOptions
   -> Middleware
   -> st
-  -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
+  -> (Context -> st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
   -> Application
 app index options middleware initial step
   = websocketsOr options (websocketApp initial step) (middleware backupApp)
@@ -77,33 +106,57 @@ app index options middleware initial step
 
 websocketApp :: forall st.
      st
-  -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
+  -> (Context -> st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
   -> ServerApp
 websocketApp initial step pendingConn = do
   conn <- acceptRequest pendingConn
   chan <- newTVarIO Nothing
   cf   <- newTVarIO Nothing
+  cbs  <- newIORef (0, M.empty)
+
+  let ctx = Context
+        { registerCallback = \cb -> atomicModifyIORef' cbs $ \(cbId, cbs') ->
+            ( ( cbId + 1
+              , flip (M.insert cbId) cbs' $ \arg -> case A.fromJSON arg of
+                  A.Success arg' -> cb arg'
+                  _ -> pure ()
+              )
+            , Callback cbId
+            )
+        , unregisterCallback = \(Callback cbId') -> atomicModifyIORef' cbs $ \(cbId, cbs') ->
+            ((cbId, M.delete cbId' cbs'), ())
+        , call = \arg js -> sendTextData conn $ A.encode $ Call (A.toJSON arg) js
+        }
 
   forkPingThread conn 30
 
   tid <- forkIO $ forever $ do
     msg <- receiveData conn
     case A.decode msg of
-      Just msg' -> do
-        join $ atomically $ do
-          fire <- readTVar chan
-          case fire of
-            Just fire' -> do
-              case fire' msg' of
-                Just io -> do
-                  writeTVar chan Nothing
-                  writeTVar cf (Just $ evtClientFrame msg')
-                  pure io
-                Nothing -> pure (pure ())
-            Nothing -> retry
+      Just msg' -> case msg' of
+        Event {} -> do
+          join $ atomically $ do
+            fire <- readTVar chan
+            case fire of
+              Just fire' -> do
+                case fire' msg' of
+                  Just io -> do
+                    writeTVar chan Nothing
+                    writeTVar cf (Just $ evtClientFrame msg')
+                    pure io
+                  Nothing -> pure (pure ())
+              Nothing -> retry
+
+        CallCallback arg cbId -> do
+          (_, cbs') <- readIORef cbs
+
+          case M.lookup cbId cbs' of
+            Just cb -> cb arg
+            Nothing -> pure ()
+
       Nothing -> traceIO $ "Couldn't decode event: " <> show msg
 
-  r <- try $ go conn chan cf Nothing initial 0
+  r <- try $ go conn ctx chan cf Nothing initial 0
 
   case r of
     Left (SomeException e) -> sendCloseCode conn closeCodeInternalError (T.pack $ show e)
@@ -114,9 +167,9 @@ websocketApp initial step pendingConn = do
   where
     closeCodeInternalError = 1011
 
-    go :: Connection -> TVar (Maybe (Event -> Maybe (IO ()))) -> TVar (Maybe Int) -> Maybe V.HTML -> st -> Int -> IO ()
-    go conn chan cf oldDom st serverFrame = do
-      r <- step st
+    go :: Connection -> Context -> TVar (Maybe (Event -> Maybe (IO ()))) -> TVar (Maybe Int) -> Maybe V.HTML -> st -> Int -> IO ()
+    go conn ctx chan cf oldDom st serverFrame = do
+      r <- step ctx st
       case r of
         Nothing -> pure ()
         Just (newDom, next, fire) -> do
@@ -137,4 +190,4 @@ websocketApp initial step pendingConn = do
 
           atomically $ writeTVar chan (Just fire)
 
-          go conn chan cf (Just newDom) next (serverFrame + 1)
+          go conn ctx chan cf (Just newDom) next (serverFrame + 1)
