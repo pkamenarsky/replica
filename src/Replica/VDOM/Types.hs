@@ -12,8 +12,13 @@ t = id
 
 type HTML = [VDOM]
 
+-- | A namespace URI.
+--
+-- For details, see the documentation on the @namespaceURI@ argument
+-- to [createElementNS](https://developer.mozilla.org/en-US/docs/Web/API/Document/createElementNS).
 newtype Namespace = Namespace { getNamespace :: T.Text } deriving (Eq, Ord, Show)
 
+-- | Representation of the Document Object Model in Haskell.
 data VDOM
   = VNode    !T.Text !Attrs !(Maybe Namespace) ![VDOM]
   | VLeaf    !T.Text !Attrs !(Maybe Namespace)
