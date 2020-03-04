@@ -1,5 +1,3 @@
-{-# LANGUAGE ConstraintKinds     #-}
-{-# LANGUAGE DeriveFunctor       #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
@@ -34,7 +32,12 @@ fireWithAttrs attrs evtName evtValue = case M.lookup evtName attrs of
   Just (AEvent attrEvent) -> Just (attrEvent evtValue)
   _ -> Nothing
 
-fireEvent :: HTML -> Path -> T.Text -> DOMEvent -> Maybe (IO ())
+fireEvent
+  :: HTML
+  -> Path
+  -> T.Text -- ^ Event name
+  -> DOMEvent
+  -> Maybe (IO ())
 fireEvent _ []      = \_ _ -> Nothing
 fireEvent ds (x:xs) = if x < length ds
   then fireEventOnNode (ds !! x) xs
