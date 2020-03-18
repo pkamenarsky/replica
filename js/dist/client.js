@@ -266,7 +266,7 @@ const CLOSE_CODE_INTERNAL_ERROR = 1011;
 function connect() {
     let root = document.createElement('div');
     const port = window.location.port ? window.location.port : (window.location.protocol === 'http' ? 80 : 443);
-    const ws = new WebSocket("ws://" + window.location.hostname + ":" + port);
+    const ws = new WebSocket("ws://" + window.location.hostname + ":" + port + window.location.pathname);
     document.body.appendChild(root);
     window['callCallback'] = (cbId, arg) => {
         const msg = {

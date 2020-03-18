@@ -22,7 +22,7 @@ import qualified Data.Text.Lazy                 as TL
 import qualified Data.Text.Lazy.Builder         as TB
 import           Network.HTTP.Types             (status200)
 
-import           Network.WebSockets             (ServerApp)
+import           Network.WebSockets             (RequestHead, ServerApp, pendingRequest)
 import           Network.WebSockets.Connection  (ConnectionOptions, Connection, acceptRequest, forkPingThread, receiveData, sendTextData, sendClose, sendCloseCode)
 import           Network.Wai                    (Application, Middleware, responseLBS)
 import           Network.Wai.Handler.WebSockets (websocketsOr)
@@ -109,7 +109,7 @@ app :: forall st.
      V.HTML
   -> ConnectionOptions
   -> Middleware
-  -> st
+  -> (RequestHead -> st)
   -> (Context -> st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
   -> Application
 app index options middleware initial step
@@ -122,7 +122,7 @@ app index options middleware initial step
     backupApp _ respond = respond $ responseLBS status200 [("content-type", "text/html")] indexBS
 
 websocketApp :: forall st.
-     st
+     (RequestHead -> st)
   -> (Context -> st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
   -> ServerApp
 websocketApp initial step pendingConn = do
@@ -173,7 +173,7 @@ websocketApp initial step pendingConn = do
 
       Nothing -> traceIO $ "Couldn't decode event: " <> show msg
 
-  r <- try $ go conn ctx chan cf Nothing initial 0
+  r <- try $ go conn ctx chan cf Nothing (initial (pendingRequest pendingConn)) 0
 
   case r of
     Left (SomeException e) -> sendCloseCode conn closeCodeInternalError (T.pack $ show e)
