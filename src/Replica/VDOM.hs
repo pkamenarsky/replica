@@ -29,12 +29,12 @@ t = id
 
 type Path = [Int]
 
-fireWithAttrs :: Attrs -> T.Text -> DOMEvent -> Maybe (IO ())
+fireWithAttrs :: Attrs (DOMEvent -> m ()) -> T.Text -> DOMEvent -> Maybe (m ())
 fireWithAttrs attrs evtName evtValue = case M.lookup evtName attrs of
   Just (AEvent attrEvent) -> Just (attrEvent evtValue)
   _ -> Nothing
 
-fireEvent :: HTML -> Path -> T.Text -> DOMEvent -> Maybe (IO ())
+fireEvent :: HTML (DOMEvent -> m ()) -> Path -> T.Text -> DOMEvent -> Maybe (m ())
 fireEvent _ []      = \_ _ -> Nothing
 fireEvent ds (x:xs) = if x < length ds
   then fireEventOnNode (ds !! x) xs
@@ -50,7 +50,7 @@ fireEvent ds (x:xs) = if x < length ds
 clientDriver :: B.ByteString
 clientDriver = $(FE.embedFile "./js/dist/client.js")
 
-defaultIndex :: T.Text -> HTML -> HTML
+defaultIndex :: T.Text -> HTML event -> HTML event
 defaultIndex title header =
   [ VLeaf "meta" (fl [("charset", AText "utf-8")]) Nothing
   , VLeaf "!doctype" (fl [("html", ABool True)]) Nothing

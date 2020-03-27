@@ -10,17 +10,17 @@ import qualified Data.Map                   as M
 t :: T.Text -> T.Text
 t = id
 
-type HTML = [VDOM]
+type HTML event = [VDOM event]
 
 newtype Namespace = Namespace { getNamespace :: T.Text } deriving (Eq, Ord, Show)
 
-data VDOM
-  = VNode    !T.Text !Attrs !(Maybe Namespace) ![VDOM]
-  | VLeaf    !T.Text !Attrs !(Maybe Namespace)
+data VDOM event
+  = VNode    !T.Text !(Attrs event) !(Maybe Namespace) ![VDOM event]
+  | VLeaf    !T.Text !(Attrs event) !(Maybe Namespace)
   | VText    !T.Text
   | VRawText !T.Text
 
-instance A.ToJSON VDOM where
+instance A.ToJSON (VDOM event) where
   toJSON (VText text) = A.object
     [ "type" .= t "text"
     , "text" .= text
@@ -43,15 +43,15 @@ instance A.ToJSON VDOM where
     , "namespace" .= fmap getNamespace mNamespace
     ]
 
-type Attrs = M.Map T.Text Attr
+type Attrs event = M.Map T.Text (Attr event)
 
-data Attr
+data Attr event
   = AText  !T.Text
   | ABool  !Bool
-  | AEvent !(DOMEvent -> IO ())
-  | AMap   !Attrs
+  | AEvent !event
+  | AMap   !(Attrs event)
 
-instance A.ToJSON Attr where
+instance A.ToJSON (Attr event) where
   toJSON (AText v) = A.String v
   toJSON (ABool v)  = A.Bool v
   toJSON (AEvent _) = A.Null

@@ -13,13 +13,13 @@ import           Replica.VDOM.Types         (HTML, VDOM(VNode,VLeaf,VText,VRawTe
 t :: T.Text -> T.Text
 t = id
 
-data Diff
+data Diff event
   = Delete !Int
-  | Insert !Int !VDOM
-  | Diff !Int ![AttrDiff] ![Diff]
+  | Insert !Int !(VDOM event)
+  | Diff !Int ![AttrDiff event] ![Diff event]
   | ReplaceText !Int !T.Text
 
-instance A.ToJSON Diff where
+instance A.ToJSON (Diff event) where
   toJSON (Delete i) = A.object
     [ "type"  .= t "delete"
     , "index" .= i
@@ -41,12 +41,12 @@ instance A.ToJSON Diff where
     , "text"  .= text
     ]
 
-data AttrDiff
+data AttrDiff event
   = DeleteKey !T.Text
-  | InsertKey !T.Text !Attr
-  | DiffKey   !T.Text ![KeyDiff]
+  | InsertKey !T.Text !(Attr event)
+  | DiffKey   !T.Text ![KeyDiff event]
 
-instance A.ToJSON AttrDiff where
+instance A.ToJSON (AttrDiff event) where
   toJSON (DeleteKey k) = A.object
     [ "type" .= t "delete"
     , "key" .= k
@@ -62,11 +62,11 @@ instance A.ToJSON AttrDiff where
     , "diff" .= ds
     ]
 
-data KeyDiff
-  = Replace !Attr
-  | DiffMap ![AttrDiff]
+data KeyDiff event
+  = Replace !(Attr event)
+  | DiffMap ![AttrDiff event]
 
-instance A.ToJSON KeyDiff where
+instance A.ToJSON (KeyDiff event) where
   toJSON (Replace v) = A.object
     [ "type" .= t "replace"
     , "value" .= v
@@ -76,7 +76,7 @@ instance A.ToJSON KeyDiff where
     , "diff" .= ds
     ]
 
-diff :: HTML -> HTML -> [Diff]
+diff :: HTML event -> HTML event -> [Diff event]
 diff a b = concatMap (uncurry toDiff) (zip vdiffs is)
   where
     go :: Int -> [D.Diff a] -> [Int]
@@ -87,7 +87,7 @@ diff a b = concatMap (uncurry toDiff) (zip vdiffs is)
     vdiffs = D.getDiffBy eqNode a b
     is     = go 0 vdiffs
 
-    toDiff :: D.Diff VDOM -> Int -> [Diff]
+    toDiff :: D.Diff (VDOM event) -> Int -> [Diff event]
     toDiff (D.First _) i  = [Delete i]
     toDiff (D.Second v) i = [Insert i v]
     toDiff (D.Both (VNode _ ca cNs c) v@(VNode _ da dNs d)) i
@@ -131,7 +131,7 @@ diff a b = concatMap (uncurry toDiff) (zip vdiffs is)
     eqNode (VRawText _) (VRawText _) = True
     eqNode _ _ = False
 
-diffAttrs :: Attrs -> Attrs -> [AttrDiff]
+diffAttrs :: Attrs event -> Attrs event -> [AttrDiff event]
 diffAttrs a b
   =  fmap DeleteKey (M.keys deleted)
   <> fmap (uncurry InsertKey) (M.assocs inserted)
@@ -141,14 +141,14 @@ diffAttrs a b
     inserted = b `M.difference` a
     same     = M.intersectionWith (,) a b
 
-    diffKey :: (T.Text, (Attr, Attr)) -> [AttrDiff]
+    diffKey :: (T.Text, (Attr event, Attr event)) -> [AttrDiff event]
     diffKey (k, (m, n))
       | null ds   = []
       | otherwise = [DiffKey k ds]
       where
         ds = diffVValue m n
 
-    diffVValue :: Attr -> Attr -> [KeyDiff]
+    diffVValue :: Attr event -> Attr event -> [KeyDiff event]
     diffVValue (AText m) vn@(AText n)
       | m == n = []
       | otherwise = [Replace vn]
@@ -163,7 +163,7 @@ diffAttrs a b
         das = diffAttrs m n
     diffVValue _ n                   = [Replace n]
 
-patch :: [Diff] -> HTML -> HTML
+patch :: [Diff event ] -> HTML event -> HTML event
 patch [] a                  = a
 patch (Delete i:rds) a      = patch rds $ take i a <> drop (i + 1) a
 patch (Insert i v:rds) a    = patch rds $ take i a <> [v] <> drop i a
@@ -181,7 +181,7 @@ patch (ReplaceText i n:rds) a = patch rds $ take i a <> [v] <> drop (i + 1) a
       VRawText _  -> VRawText n
       _           -> error "Can't text patch node"
 
-patchAttrs :: [AttrDiff] -> Attrs -> Attrs
+patchAttrs :: [AttrDiff event] -> Attrs event -> Attrs event
 patchAttrs [] a                 = a
 patchAttrs (DeleteKey k:ds) a   = patchAttrs ds $ M.delete k a
 patchAttrs (InsertKey k v:ds) a = patchAttrs ds $ M.insert k v a

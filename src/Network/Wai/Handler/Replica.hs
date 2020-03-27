@@ -30,6 +30,9 @@ import qualified Replica.VDOM.Render            as R
 
 import           Debug.Trace                    (traceIO)
 
+type HTML = V.HTML (V.DOMEvent -> IO ())
+type Diff = V.Diff (V.DOMEvent -> IO ())
+
 data Event = Event
   { evtType        :: T.Text
   , evtEvent       :: A.Value
@@ -46,8 +49,8 @@ instance A.FromJSON Event where
   parseJSON _ = fail "Expected object"
 
 data Update
-  = ReplaceDOM V.HTML
-  | UpdateDOM Int (Maybe Int) [V.Diff]
+  = ReplaceDOM HTML
+  | UpdateDOM Int (Maybe Int) [Diff]
 
 instance A.ToJSON Update where
   toJSON (ReplaceDOM dom) = A.object
@@ -62,11 +65,11 @@ instance A.ToJSON Update where
     ]
 
 app :: forall st.
-     V.HTML
+     HTML
   -> ConnectionOptions
   -> Middleware
   -> st
-  -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
+  -> (st -> IO (Maybe (HTML, st, Event -> Maybe (IO ()))))
   -> Application
 app index options middleware initial step
   = websocketsOr options (websocketApp initial step) (middleware backupApp)
@@ -79,7 +82,7 @@ app index options middleware initial step
 
 websocketApp :: forall st.
      st
-  -> (st -> IO (Maybe (V.HTML, st, Event -> Maybe (IO ()))))
+  -> (st -> IO (Maybe (HTML, st, Event -> Maybe (IO ()))))
   -> ServerApp
 websocketApp initial step pendingConn = do
   conn <- acceptRequest pendingConn
@@ -116,7 +119,7 @@ websocketApp initial step pendingConn = do
   where
     closeCodeInternalError = 1011
 
-    go :: Connection -> TVar (Maybe (Event -> Maybe (IO ()))) -> TVar (Maybe Int) -> Maybe V.HTML -> st -> Int -> IO ()
+    go :: Connection -> TVar (Maybe (Event -> Maybe (IO ()))) -> TVar (Maybe Int) -> Maybe HTML -> st -> Int -> IO ()
     go conn chan cf oldDom st serverFrame = do
       r <- step st
       case r of
@@ -142,10 +145,10 @@ websocketApp initial step pendingConn = do
           go conn chan cf (Just newDom) next (serverFrame + 1)
 
 app'
-  :: V.HTML
+  :: HTML
   -> ConnectionOptions
   -> Middleware
-  -> IO (IO V.HTML, Event -> IO ())
+  -> IO (IO HTML, Event -> IO ())
   -> Application
 app' index options middleware spawn
   = websocketsOr options (websocketApp' spawn) (middleware backupApp)
@@ -157,7 +160,7 @@ app' index options middleware spawn
     backupApp _ respond = respond $ responseLBS status200 [("content-type", "text/html")] indexBS
 
 websocketApp'
-  :: IO (IO V.HTML, Event -> IO ())
+  :: IO (IO HTML, Event -> IO ())
   -> ServerApp
 websocketApp' spawn pendingConn = do
   conn <- acceptRequest pendingConn
