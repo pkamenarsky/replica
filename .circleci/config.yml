@@ -1,6 +1,6 @@
 version: 2
 jobs:
-  build-8.6.4:
+  build-16.18:
     docker:
       - image: fpco/stack-build:lts-16.18
 
