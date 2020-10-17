@@ -4,7 +4,7 @@ jobs:
     docker:
       - image: fpco/stack-build:lts-16.18
 
-    working_directory: /home/stackage
+    working_directory: /home/stackage/src
 
     steps:
       - checkout
@@ -16,11 +16,11 @@ jobs:
           key: v1-cache-16.18-stack-work-{{checksum "stack.yaml"}}-{{checksum "package.yaml"}}
           paths:
             - /root/.stack
-            - /home/stackage/.stack-work
+            - /home/stackage/src/.stack-work
       - store_test_results:
-          path: /home/stackage/.stack-work/logs
+          path: /home/stackage/src/.stack-work/logs
 workflows:
   version: 2
   build-and-deploy:
     jobs:
-      - build-8.6.4
+      - build-16.18
