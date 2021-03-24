@@ -23,7 +23,7 @@ import qualified Data.Text.Lazy.Builder         as TB
 import           Network.HTTP.Types             (status200)
 
 import           Network.WebSockets             (ServerApp)
-import           Network.WebSockets.Connection  (ConnectionOptions, Connection, acceptRequest, forkPingThread, receiveData, sendTextData, sendClose, sendCloseCode)
+import           Network.WebSockets.Connection  (ConnectionOptions, Connection, acceptRequest, withPingThread, receiveData, sendTextData, sendClose, sendCloseCode)
 import           Network.Wai                    (Application, Middleware, responseLBS)
 import           Network.Wai.Handler.WebSockets (websocketsOr)
 
@@ -109,7 +109,7 @@ app :: forall st.
      V.HTML
   -> ConnectionOptions
   -> Middleware
-  -> st
+  -> IO st
   -> (Context -> st -> IO (V.HTML, Event -> Maybe (IO ()), IO (Maybe st)))
   -> Application
 app index options middleware initial step
@@ -122,7 +122,7 @@ app index options middleware initial step
     backupApp _ respond = respond $ responseLBS status200 [("content-type", "text/html")] indexBS
 
 websocketApp :: forall st.
-     st
+     IO st
   -> (Context -> st -> IO (V.HTML, Event -> Maybe (IO ()), IO (Maybe st)))
   -> ServerApp
 websocketApp initial step pendingConn = do
@@ -145,41 +145,41 @@ websocketApp initial step pendingConn = do
         , call = \arg js -> sendTextData conn $ A.encode $ Call (A.toJSON arg) js
         }
 
-  forkPingThread conn 30
+  withPingThread conn 30 (pure ()) $ do
+    tid <- forkIO $ forever $ do
+      msg <- receiveData conn
+      case A.decode msg of
+        Just msg' -> case msg' of
+          Event {} -> do
+            join $ atomically $ do
+              fire <- readTVar chan
+              case fire of
+                Just fire' -> do
+                  case fire' msg' of
+                    Just io -> do
+                      writeTVar chan Nothing
+                      writeTVar cf (Just $ evtClientFrame msg')
+                      pure io
+                    Nothing -> pure (pure ())
+                Nothing -> retry
 
-  tid <- forkIO $ forever $ do
-    msg <- receiveData conn
-    case A.decode msg of
-      Just msg' -> case msg' of
-        Event {} -> do
-          join $ atomically $ do
-            fire <- readTVar chan
-            case fire of
-              Just fire' -> do
-                case fire' msg' of
-                  Just io -> do
-                    writeTVar chan Nothing
-                    writeTVar cf (Just $ evtClientFrame msg')
-                    pure io
-                  Nothing -> pure (pure ())
-              Nothing -> retry
+          CallCallback arg cbId -> do
+            (_, cbs') <- readIORef cbs
 
-        CallCallback arg cbId -> do
-          (_, cbs') <- readIORef cbs
+            case M.lookup cbId cbs' of
+              Just cb -> cb arg
+              Nothing -> pure ()
 
-          case M.lookup cbId cbs' of
-            Just cb -> cb arg
-            Nothing -> pure ()
+        Nothing -> traceIO $ "Couldn't decode event: " <> show msg
 
-      Nothing -> traceIO $ "Couldn't decode event: " <> show msg
+    initial' <- initial
+    r <- try $ go conn ctx chan cf Nothing initial' 0
 
-  r <- try $ go conn ctx chan cf Nothing initial 0
+    case r of
+      Left (SomeException e) -> sendCloseCode conn closeCodeInternalError (T.pack $ show e)
+      Right _ -> sendClose conn ("done" :: T.Text)
 
-  case r of
-    Left (SomeException e) -> sendCloseCode conn closeCodeInternalError (T.pack $ show e)
-    Right _ -> sendClose conn ("done" :: T.Text)
-
-  killThread tid
+    killThread tid
 
   where
     closeCodeInternalError = 1011
