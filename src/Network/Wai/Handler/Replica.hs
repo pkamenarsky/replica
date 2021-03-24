@@ -105,15 +105,16 @@ data Context = Context
   , call               :: forall a. A.ToJSON a => a -> T.Text -> IO ()
   }
 
-app :: forall st.
+app :: forall st session.
      V.HTML
   -> ConnectionOptions
   -> Middleware
   -> IO st
-  -> (Context -> st -> IO (V.HTML, Event -> Maybe (IO ()), IO (Maybe st)))
+  -> IO session
+  -> (Context -> st -> session -> IO (V.HTML, Event -> Maybe (IO ()), IO (Maybe st)))
   -> Application
-app index options middleware initial step
-  = websocketsOr options (websocketApp initial step) (middleware backupApp)
+app index options middleware initial session step
+  = websocketsOr options (websocketApp initial session step) (middleware backupApp)
 
   where
     indexBS = BL.fromStrict $ TE.encodeUtf8 $ TL.toStrict $ TB.toLazyText $ R.renderHTML index
@@ -121,11 +122,12 @@ app index options middleware initial step
     backupApp :: Application
     backupApp _ respond = respond $ responseLBS status200 [("content-type", "text/html")] indexBS
 
-websocketApp :: forall st.
+websocketApp :: forall st session.
      IO st
-  -> (Context -> st -> IO (V.HTML, Event -> Maybe (IO ()), IO (Maybe st)))
+  -> IO session
+  -> (Context -> st -> session -> IO (V.HTML, Event -> Maybe (IO ()), IO (Maybe st)))
   -> ServerApp
-websocketApp initial step pendingConn = do
+websocketApp getInitial getSession step pendingConn = do
   conn  <- acceptRequest pendingConn
   chan  <- newTVarIO Nothing
   cf    <- newTVarIO Nothing
@@ -172,8 +174,9 @@ websocketApp initial step pendingConn = do
 
         Nothing -> traceIO $ "Couldn't decode event: " <> show msg
 
-    initial' <- initial
-    r <- try $ go conn ctx chan cf Nothing initial' 0
+    initial <- getInitial
+    session <- getSession
+    r <- try $ go conn ctx chan cf Nothing initial session 0
 
     case r of
       Left (SomeException e) -> sendCloseCode conn closeCodeInternalError (T.pack $ show e)
@@ -184,9 +187,9 @@ websocketApp initial step pendingConn = do
   where
     closeCodeInternalError = 1011
 
-    go :: Connection -> Context -> TVar (Maybe (Event -> Maybe (IO ()))) -> TVar (Maybe Int) -> Maybe V.HTML -> st -> Int -> IO ()
-    go conn ctx chan cf oldDom st serverFrame = do
-      (newDom, fire, io) <- step ctx st
+    go :: Connection -> Context -> TVar (Maybe (Event -> Maybe (IO ()))) -> TVar (Maybe Int) -> Maybe V.HTML -> st -> session -> Int -> IO ()
+    go conn ctx chan cf oldDom st session serverFrame = do
+      (newDom, fire, io) <- step ctx st session
 
       clientFrame <- atomically $ do
         a <- readTVar cf
@@ -208,4 +211,4 @@ websocketApp initial step pendingConn = do
       r <- io
       case r of
         Nothing   -> pure ()
-        Just next -> go conn ctx chan cf (Just newDom) next (serverFrame + 1)
+        Just next -> go conn ctx chan cf (Just newDom) next session (serverFrame + 1)
