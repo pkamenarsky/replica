@@ -82,6 +82,7 @@ For finer grained integration, there's `Network.Wai.Handler.Replica.websocketApp
 ## List of **Replica** frameworks
 
 * [`concur-replica`](https://github.com/pkamenarsky/concur-replica)
+* [`refract-replica`](https://github.com/pkamenarsky/refract-replica)
 
 ## Roadmap
 
