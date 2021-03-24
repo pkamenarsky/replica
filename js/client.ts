@@ -455,7 +455,12 @@ function connect() {
   ws.onclose = (event) => {
     switch (event.code) {
       case CLOSE_CODE_NORMAL_CLOSURE:
-        // Server-side gracefully ended.
+        // Server-side gracefully ended, reconnect.
+        console.log("Reconnecting...");
+
+        document.body.removeChild(root);
+        connect();
+ 
         break;
       case CLOSE_CODE_INTERNAL_ERROR:
         // Error occured on server-side.
