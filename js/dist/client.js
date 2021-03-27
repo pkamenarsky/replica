@@ -73,28 +73,57 @@ function getElementPath(el) {
     const path = [];
     while (el !== document.body) {
         path.unshift(getElementIndex(el));
-        el = el.parentElement;
+        if (el.parentElement != null) {
+            el = el.parentElement;
+        }
+        else {
+            return null;
+        }
     }
     path.shift();
     return path;
 }
 const listeners = new Map();
-function setEventListener(ws, element, name) {
+const queuedEvents = [];
+let eventWasSent = false;
+function dequeueEvent(ws) {
+    if (queuedEvents.length > 0 && eventWasSent) {
+        console.log('Event is queued, waiting for DOM update to send...');
+    }
+    if (queuedEvents.length > 0 && !eventWasSent) {
+        const [name, element, event] = queuedEvents[0];
+        const eventName = name.substring(2).toLowerCase();
+        const path = getElementPath(element);
+        queuedEvents.shift();
+        if (path) {
+            const msg = {
+                type: 'event',
+                eventType: name,
+                event: JSON.parse(stringifyEvent(event)),
+                path: getElementPath(element),
+                clientFrame: serverFrame,
+            };
+            if (eventName === 'input') {
+                addFrame(element, serverFrame, 'value', event.target.value);
+            }
+            eventWasSent = true;
+            ws.send(JSON.stringify(msg));
+        }
+    }
+}
+function setEventListener(ws, element, name, opts) {
     const eventName = name.substring(2).toLowerCase();
     const listener = (event) => {
-        const msg = {
-            type: 'event',
-            eventType: name,
-            event: JSON.parse(stringifyEvent(event)),
-            path: getElementPath(element),
-            clientFrame: serverFrame,
-        };
-        if (eventName === 'input') {
-            addFrame(element, serverFrame, 'value', event.target.value);
+        if (opts.preventDefault) {
+            event.preventDefault();
         }
-        ws.send(JSON.stringify(msg));
+        if (opts.stopPropagation) {
+            event.stopPropagation();
+        }
+        queuedEvents.push([name, element, event]);
+        dequeueEvent(ws);
     };
-    element.addEventListener(eventName, listener);
+    element.addEventListener(eventName, listener, opts.capture);
     const elementListeners = listeners.get(element);
     if (elementListeners === undefined) {
         listeners.set(element, new Map([[name, listener]]));
@@ -109,7 +138,7 @@ function setAttribute(ws, element, onProp, attr, value) {
     }
     else {
         if (attr.startsWith('on')) {
-            setEventListener(ws, element, attr);
+            setEventListener(ws, element, attr, value);
         }
         else if (value !== null) {
             if (attr === 'value') {
@@ -215,6 +244,7 @@ function patchAttribute(ws, element, onProp, adiff) {
             for (const vdiff of adiff.diff) {
                 switch (vdiff.type) {
                     case 'replace':
+                        removeAttribute(element, onProp, adiff.key);
                         setAttribute(ws, element, onProp, adiff.key, vdiff.value);
                         break;
                     case 'diff':
@@ -296,6 +326,8 @@ function connect() {
                     serverFrame = update.serverFrame;
                     clientFrame = update.clientFrame;
                     patch(ws, update.serverFrame, update.diff, root);
+                    eventWasSent = false;
+                    dequeueEvent(ws);
                 }
                 break;
             case 'call':
@@ -308,9 +340,9 @@ function connect() {
         switch (event.code) {
             case CLOSE_CODE_ABNORMAL_CLOSURE:
                 // Server-side ended abnormally, reconnect.
-                console.log("Reconnecting...");
-                document.body.removeChild(root);
-                connect();
+                // console.log("Reconnecting...");
+                // document.body.removeChild(root);
+                // connect();
                 break;
             case CLOSE_CODE_NORMAL_CLOSURE:
                 // Server-side gracefully ended.

@@ -4,7 +4,6 @@ module Replica.VDOM.Diff where
 
 import           Data.Aeson                 ((.=))
 import qualified Data.Aeson                 as A
-import           Data.Monoid                ((<>))
 import qualified Data.Text                  as T
 import qualified Data.Map                   as M
 import qualified Data.Algorithm.Diff        as D
@@ -155,7 +154,9 @@ diffAttrs a b
     diffVValue (ABool m) vn@(ABool n)
       | m == n = []
       | otherwise = [Replace vn]
-    diffVValue (AEvent _) (AEvent _) = []
+    diffVValue (AEvent m _) vn@(AEvent n _)
+       | m == n = []
+       | otherwise = [Replace vn]
     diffVValue (AMap m) (AMap n)
       | null das  = []
       | otherwise = [DiffMap $ diffAttrs m n]

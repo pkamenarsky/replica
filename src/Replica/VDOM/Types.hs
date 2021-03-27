@@ -48,18 +48,31 @@ instance A.ToJSON VDOM where
     , "namespace" .= fmap getNamespace mNamespace
     ]
 
+data EventOptions = EventOptions
+  { evtCapture :: Bool
+  , evtPreventDefault :: Bool
+  , evtStopPropagation :: Bool
+  } deriving (Eq, Ord, Show)
+
+instance A.ToJSON EventOptions where
+  toJSON opts = A.object
+    [ "capture" .= evtCapture opts
+    , "preventDefault" .= evtPreventDefault opts
+    , "stopPropagation" .= evtStopPropagation opts
+    ]
+
 type Attrs = M.Map T.Text Attr
 
 data Attr
   = AText  !T.Text
   | ABool  !Bool
-  | AEvent !(DOMEvent -> IO ())
+  | AEvent EventOptions !(DOMEvent -> IO ())
   | AMap   !Attrs
 
 instance A.ToJSON Attr where
-  toJSON (AText v) = A.String v
-  toJSON (ABool v)  = A.Bool v
-  toJSON (AEvent _) = A.Null
-  toJSON (AMap v)   = A.toJSON $ fmap A.toJSON v
+  toJSON (AText v)       = A.String v
+  toJSON (ABool v)       = A.Bool v
+  toJSON (AEvent opts _) = A.toJSON opts
+  toJSON (AMap v)        = A.toJSON $ fmap A.toJSON v
 
 newtype DOMEvent = DOMEvent { getDOMEvent :: A.Value }

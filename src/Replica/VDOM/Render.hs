@@ -2,7 +2,6 @@
 
 module Replica.VDOM.Render where
 
-import           Data.Monoid                ((<>))
 import qualified Data.Text                  as T
 import qualified Data.Text.Lazy.Builder     as TB
 import qualified Data.Map                   as M
@@ -40,7 +39,7 @@ renderAttrs = foldMap (TB.singleton ' ' <>) . _renderAttrs
       AText txt   -> [TB.fromText name <> eq <> dq <> renderEscapedString txt <> dq]
       ABool True  -> [TB.fromText name]
       ABool False -> []
-      AEvent _    -> []
+      AEvent _ _  -> []
       AMap attrs  -> _renderAttrs attrs
 
 renderEscapedString :: T.Text -> TB.Builder

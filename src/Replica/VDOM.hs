@@ -13,7 +13,6 @@ module Replica.VDOM
 
 import qualified Data.ByteString            as B
 import qualified Data.FileEmbed             as FE
-import           Data.Monoid                ((<>))
 import qualified Data.Text                  as T
 import qualified Data.Text.Encoding         as T
 import qualified Data.Map                   as M
@@ -29,7 +28,7 @@ type Path = [Int]
 
 fireWithAttrs :: Attrs -> T.Text -> DOMEvent -> Maybe (IO ())
 fireWithAttrs attrs evtName evtValue = case M.lookup evtName attrs of
-  Just (AEvent attrEvent) -> Just (attrEvent evtValue)
+  Just (AEvent _ attrEvent) -> Just (attrEvent evtValue)
   _ -> Nothing
 
 fireEvent
@@ -43,12 +42,12 @@ fireEvent ds (x:xs) = if x < length ds
   then fireEventOnNode (ds !! x) xs
   else \_ _ -> Nothing
   where
-    fireEventOnNode (VNode _ attrs _ns _) []        = fireWithAttrs attrs
-    fireEventOnNode (VLeaf _ attrs _ns) []          = fireWithAttrs attrs
+    fireEventOnNode (VNode _ attrs _ns _) [] = fireWithAttrs attrs
+    fireEventOnNode (VLeaf _ attrs _ns) [] = fireWithAttrs attrs
     fireEventOnNode (VNode _ _ _ns children) (p:ps) = if p < length children
       then fireEventOnNode (children !! p) ps
       else \_ _ -> Nothing
-    fireEventOnNode _ _                         = \_ _ -> Nothing
+    fireEventOnNode _ _ = \_ _ -> Nothing
 
 clientDriver :: B.ByteString
 clientDriver = $(FE.embedFile "./js/dist/client.js")
