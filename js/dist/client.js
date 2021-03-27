@@ -84,29 +84,17 @@ function getElementPath(el) {
     return path;
 }
 const listeners = new Map();
-const queuedEvents = [];
-let eventWasSent = false;
-function dequeueEvent(ws) {
-    if (queuedEvents.length > 0 && eventWasSent) {
-        console.log('Event is queued, waiting for DOM update to send...');
+const queuedMessages = [];
+let messageWasSent = false;
+function dequeueMessage(ws) {
+    if (queuedMessages.length > 0 && messageWasSent) {
+        console.log('Message is queued, waiting for DOM update to send...');
     }
-    if (queuedEvents.length > 0 && !eventWasSent) {
-        const [name, element, event] = queuedEvents[0];
-        const eventName = name.substring(2).toLowerCase();
-        const path = getElementPath(element);
-        queuedEvents.shift();
-        if (path) {
-            const msg = {
-                type: 'event',
-                eventType: name,
-                event: JSON.parse(stringifyEvent(event)),
-                path: getElementPath(element),
-                clientFrame: serverFrame,
-            };
-            if (eventName === 'input') {
-                addFrame(element, serverFrame, 'value', event.target.value);
-            }
-            eventWasSent = true;
+    if (queuedMessages.length > 0 && !messageWasSent) {
+        const f = queuedMessages.shift();
+        const msg = f ? f() : null;
+        if (msg) {
+            messageWasSent = true;
             ws.send(JSON.stringify(msg));
         }
     }
@@ -120,16 +108,34 @@ function setEventListener(ws, element, name, opts) {
         if (opts.stopPropagation) {
             event.stopPropagation();
         }
-        queuedEvents.push([name, element, event]);
-        dequeueEvent(ws);
+        queuedMessages.push(() => {
+            const path = getElementPath(element);
+            if (path) {
+                const msg = {
+                    type: 'event',
+                    eventType: name,
+                    event: JSON.parse(stringifyEvent(event)),
+                    path: getElementPath(element),
+                    clientFrame: serverFrame,
+                };
+                if (eventName === 'input') {
+                    addFrame(element, serverFrame, 'value', event.target.value);
+                }
+                return msg;
+            }
+            else {
+                return null;
+            }
+        });
+        dequeueMessage(ws);
     };
     element.addEventListener(eventName, listener, opts.capture);
     const elementListeners = listeners.get(element);
     if (elementListeners === undefined) {
-        listeners.set(element, new Map([[name, listener]]));
+        listeners.set(element, new Map([[name, [listener, opts.capture]]]));
     }
     else {
-        elementListeners.set(name, listener);
+        elementListeners.set(name, [listener, opts.capture]);
     }
 }
 function setAttribute(ws, element, onProp, attr, value) {
@@ -220,7 +226,11 @@ function removeAttribute(element, onProp, attr) {
             const m = listeners.get(element);
             if (m !== undefined) {
                 const eventName = attr.substring(2).toLowerCase();
-                element.removeEventListener(eventName, m.get(attr));
+                const v = m.get(attr);
+                if (v) {
+                    const [listener, capture] = v;
+                    element.removeEventListener(eventName, listener, capture);
+                }
                 m.delete(attr);
                 if (m.size === 0) {
                     listeners.delete(element);
@@ -300,13 +310,19 @@ function connect() {
     const wsProtocol = window.location.protocol === 'http:' ? 'ws:' : 'wss:';
     const ws = new WebSocket(wsProtocol + "//" + window.location.hostname + ":" + port);
     document.body.appendChild(root);
-    window['callCallback'] = (cbId, arg) => {
+    window['callCallback'] = (cbId, arg, queue) => {
         const msg = {
             type: 'call',
             arg,
             id: cbId
         };
-        ws.send(JSON.stringify(msg));
+        if (queue) {
+            queuedMessages.push(() => msg);
+            dequeueMessage(ws);
+        }
+        else {
+            ws.send(JSON.stringify(msg));
+        }
     };
     ws.onmessage = (event) => {
         const update = JSON.parse(event.data);
@@ -326,8 +342,8 @@ function connect() {
                     serverFrame = update.serverFrame;
                     clientFrame = update.clientFrame;
                     patch(ws, update.serverFrame, update.diff, root);
-                    eventWasSent = false;
-                    dequeueEvent(ws);
+                    messageWasSent = false;
+                    dequeueMessage(ws);
                 }
                 break;
             case 'call':

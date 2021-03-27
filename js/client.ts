@@ -177,37 +177,22 @@ function getElementPath(el: Element): number[] | null {
   return path;
 }
 
-const listeners: Map<Element, Map<string, EventListener>> = new Map();
+const listeners: Map<Element, Map<string, [EventListener, boolean]>> = new Map();
 
-const queuedEvents: [string, Element, any][] = [];
-let eventWasSent: boolean = false;
+const queuedMessages: (() => any | null)[] = [];
+let messageWasSent: boolean = false;
 
-function dequeueEvent(ws: WebSocket) {
-  if (queuedEvents.length > 0 && eventWasSent) {
-    console.log('Event is queued, waiting for DOM update to send...');
+function dequeueMessage(ws: WebSocket) {
+  if (queuedMessages.length > 0 && messageWasSent) {
+    console.log('Message is queued, waiting for DOM update to send...');
   }
 
-  if (queuedEvents.length > 0 && !eventWasSent) {
-    const [name, element, event] = queuedEvents[0];
-    const eventName = name.substring(2).toLowerCase();
-    const path = getElementPath(element);
+  if (queuedMessages.length > 0 && !messageWasSent) {
+    const f = queuedMessages.shift();
+    const msg = f ? f() : null;
 
-    queuedEvents.shift();
-
-    if (path) {
-      const msg = {
-        type: 'event',
-        eventType: name,
-        event: JSON.parse(stringifyEvent(event)),
-        path: getElementPath(element),
-        clientFrame: serverFrame,
-      };
-
-      if (eventName === 'input') {
-        addFrame(element, serverFrame, 'value', (event.target as any).value);
-      }
-
-      eventWasSent = true;
+    if (msg) {
+      messageWasSent = true;
       ws.send(JSON.stringify(msg));
     }
   }
@@ -230,8 +215,30 @@ function setEventListener(ws: WebSocket, element: Element, name: string, opts: E
       event.stopPropagation();
     }
 
-    queuedEvents.push([name, element, event]);
-    dequeueEvent(ws);
+    queuedMessages.push(() => {
+      const path = getElementPath(element);
+
+      if (path) {
+        const msg = {
+          type: 'event',
+          eventType: name,
+          event: JSON.parse(stringifyEvent(event)),
+          path: getElementPath(element),
+          clientFrame: serverFrame,
+        };
+
+        if (eventName === 'input') {
+          addFrame(element, serverFrame, 'value', (event.target as any).value);
+        }
+
+        return msg;
+      }
+      else {
+        return null;
+      }
+    });
+
+    dequeueMessage(ws);
   }
 
   element.addEventListener(eventName, listener, opts.capture);
@@ -239,10 +246,10 @@ function setEventListener(ws: WebSocket, element: Element, name: string, opts: E
   const elementListeners = listeners.get(element);
 
   if (elementListeners === undefined) {
-    listeners.set(element, new Map([[name, listener]]));
+    listeners.set(element, new Map([[name, [listener, opts.capture]]]));
   }
   else {
-    elementListeners.set(name, listener);
+    elementListeners.set(name, [listener, opts.capture]);
   }
 }
 
@@ -349,7 +356,12 @@ function removeAttribute(element: any, onProp: boolean, attr: string) {
 
       if (m !== undefined) {
         const eventName = attr.substring(2).toLowerCase();
-        element.removeEventListener(eventName, m.get(attr));
+        const v = m.get(attr);
+
+        if (v) {
+          const [listener, capture] = v;
+          element.removeEventListener(eventName, listener, capture);
+        }
 
         m.delete(attr);
 
@@ -452,14 +464,20 @@ function connect() {
 
   document.body.appendChild(root);
 
-  (window as any)['callCallback'] = (cbId: number, arg: any) => {
+  (window as any)['callCallback'] = (cbId: number, arg: any, queue: boolean) => {
     const msg = {
       type: 'call',
       arg,
       id: cbId
     };
 
-    ws.send(JSON.stringify(msg));
+    if (queue) {
+      queuedMessages.push(() => msg);
+      dequeueMessage(ws);
+    }
+    else {
+      ws.send(JSON.stringify(msg));
+    }
   };
 
   ws.onmessage = (event) => {
@@ -486,8 +504,8 @@ function connect() {
 
           patch(ws, update.serverFrame, update.diff, root);
 
-          eventWasSent = false;
-          dequeueEvent(ws);
+          messageWasSent = false;
+          dequeueMessage(ws);
         }
 
         break;
