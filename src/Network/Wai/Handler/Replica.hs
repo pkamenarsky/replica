@@ -110,7 +110,7 @@ app :: forall st session.
   -> ConnectionOptions
   -> Middleware
   -> IO st
-  -> IO session
+  -> (Context -> IO session)
   -> (Context -> st -> session -> IO (V.HTML, Event -> Maybe (IO ()), IO (Maybe st)))
   -> Application
 app index options middleware initial session step
@@ -124,7 +124,7 @@ app index options middleware initial session step
 
 websocketApp :: forall st session.
      IO st
-  -> IO session
+  -> (Context -> IO session)
   -> (Context -> st -> session -> IO (V.HTML, Event -> Maybe (IO ()), IO (Maybe st)))
   -> ServerApp
 websocketApp getInitial getSession step pendingConn = do
@@ -138,7 +138,7 @@ websocketApp getInitial getSession step pendingConn = do
             ( ( cbId + 1
               , flip (M.insert cbId) cbs' $ \arg -> case A.fromJSON arg of
                   A.Success arg' -> cb arg'
-                  _ -> pure ()
+                  A.Error e -> traceIO $ "callCallback: couldn't decode " <> show arg <> ": " <> show e
               )
             , Callback cbId
             )
@@ -175,7 +175,7 @@ websocketApp getInitial getSession step pendingConn = do
         Nothing -> traceIO $ "Couldn't decode event: " <> show msg
 
     initial <- getInitial
-    session <- getSession
+    session <- getSession ctx
     r <- try $ go conn ctx chan cf Nothing initial session 0
 
     case r of
