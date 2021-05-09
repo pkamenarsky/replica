@@ -9,6 +9,10 @@ import           Test.QuickCheck
 import           Test.QuickCheck.Instances
 
 import           Replica.VDOM
+import           Replica.VDOM.Types
+
+instance Arbitrary EventOptions where
+  arbitrary = EventOptions <$> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary Attr where
   arbitrary = do
@@ -16,19 +20,19 @@ instance Arbitrary Attr where
     case t of
       0 -> AText <$> arbitrary
       1 -> ABool <$> arbitrary
-      2 -> pure $ AEvent (\_ -> pure ())
+      2 -> AEvent <$> arbitrary <*> pure (\_ -> pure ())
       3 -> AMap <$> arbitrary
 
 instance Eq Attr where
   AText m == AText n = m == n
   ABool m == ABool n = m == n
-  AEvent _ == AEvent _ = True
+  AEvent m _ == AEvent n _ = m == n
   AMap m   == AMap n = m == n
 
 instance Show Attr where
   show (AText t)  = "AText " <> T.unpack t
   show (ABool t)  = "ABool " <> show t
-  show (AEvent _) = "AEvent"
+  show (AEvent opts _) = "AEvent" <> show opts
   show (AMap m)   = "AMap " <> show m
  
 propAttrsDiff :: Attrs -> Attrs -> Bool 
