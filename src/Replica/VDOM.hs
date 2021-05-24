@@ -11,6 +11,7 @@ module Replica.VDOM
   , module Replica.VDOM.Render
   ) where
 
+import qualified Data.Aeson                 as A
 import qualified Data.ByteString            as B
 import qualified Data.FileEmbed             as FE
 import qualified Data.Text                  as T
@@ -42,9 +43,9 @@ fireEvent ds (x:xs) = if x < length ds
   then fireEventOnNode (ds !! x) xs
   else \_ _ -> Nothing
   where
-    fireEventOnNode (VNode _ attrs _ns _) [] = fireWithAttrs attrs
-    fireEventOnNode (VLeaf _ attrs _ns) [] = fireWithAttrs attrs
-    fireEventOnNode (VNode _ _ _ns children) (p:ps) = if p < length children
+    fireEventOnNode (VNode _ attrs _ns _ _) [] = fireWithAttrs attrs
+    fireEventOnNode (VLeaf _ attrs _ns _) [] = fireWithAttrs attrs
+    fireEventOnNode (VNode _ _ _ns _ children) (p:ps) = if p < length children
       then fireEventOnNode (children !! p) ps
       else \_ _ -> Nothing
     fireEventOnNode _ _ = \_ _ -> Nothing
@@ -54,15 +55,15 @@ clientDriver = $(FE.embedFile "./js/dist/client.js")
 
 defaultIndex :: T.Text -> HTML -> HTML
 defaultIndex title header =
-  [ VLeaf "!doctype" (fl [("html", ABool True)]) Nothing
-  , VNode "html" mempty Nothing
-      [ VNode "head" mempty Nothing $
-          [ VLeaf "meta" (fl [("charset", AText "utf-8")]) Nothing
-          , VNode "title" mempty Nothing [VText title]
+  [ VLeaf "!doctype" (fl [("html", ABool True)]) Nothing A.Null
+  , VNode "html" mempty Nothing A.Null
+      [ VNode "head" mempty Nothing A.Null $
+          [ VLeaf "meta" (fl [("charset", AText "utf-8")]) Nothing A.Null
+          , VNode "title" mempty Nothing A.Null [VText title]
           ]
           <> header
-      , VNode "body" mempty Nothing
-          [ VNode "script" (fl [("language", AText "javascript")]) Nothing
+      , VNode "body" mempty Nothing A.Null
+          [ VNode "script" (fl [("language", AText "javascript")]) Nothing A.Null
               [ VRawText $ T.decodeUtf8 clientDriver ]
           ]
       ]

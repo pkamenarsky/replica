@@ -89,14 +89,14 @@ diff a b = concatMap (uncurry toDiff) (zip vdiffs is)
     toDiff :: D.Diff VDOM -> Int -> [Diff]
     toDiff (D.First _) i  = [Delete i]
     toDiff (D.Second v) i = [Insert i v]
-    toDiff (D.Both (VNode _ ca cNs c) v@(VNode _ da dNs d)) i
+    toDiff (D.Both (VNode _ ca cNs _ c) v@(VNode _ da dNs _ d)) i
       | cNs /= dNs          = [Delete i, Insert i v]
       | null das && null ds = []
       | otherwise           = [Diff i (diffAttrs ca da) (diff c d)]
       where
         das = diffAttrs ca da
         ds  = diff c d
-    toDiff (D.Both (VLeaf _ ca cNs) v@(VLeaf _ da dNs)) i
+    toDiff (D.Both (VLeaf _ ca cNs _) v@(VLeaf _ da dNs _)) i
       | cNs /= dNs = [Delete i, Insert i v]
       | null das   = []
       | otherwise  = [Diff i (diffAttrs ca da) []]
@@ -118,11 +118,11 @@ diff a b = concatMap (uncurry toDiff) (zip vdiffs is)
     eqType Nothing Nothing = True
     eqType _ _ = False
 
-    eqNode (VNode n na nNs _) (VNode m ma mNs _)
+    eqNode (VNode n na nNs _ _) (VNode m ma mNs _ _)
       | Just (AText k1) <- key na
       , Just (AText k2) <- key ma = k1 == k2
       | otherwise = n == m && nNs == mNs && M.lookup "type" na `eqType` M.lookup "type" ma
-    eqNode (VLeaf n na nNs) (VLeaf m ma mNs)
+    eqNode (VLeaf n na nNs _) (VLeaf m ma mNs _)
       | Just (AText k1) <- key na
       , Just (AText k2) <- key ma = k1 == k2
       | otherwise = n == m && nNs == mNs && M.lookup "type" na `eqType` M.lookup "type" ma
@@ -171,10 +171,10 @@ patch (Insert i v:rds) a    = patch rds $ take i a <> [v] <> drop i a
 patch (Diff i ads ds:rds) a = patch rds $ take i a <> [v] <> drop (i + 1) a
   where
     v = case a !! i of
-      VNode e as ns cs -> VNode e (patchAttrs ads as) ns (patch ds cs)
-      VLeaf e as ns    -> VLeaf e (patchAttrs ads as) ns
-      VText _          -> error "Can't node patch text"
-      VRawText _       -> error "Can't node patch text"
+      VNode e as ns st cs -> VNode e (patchAttrs ads as) ns st (patch ds cs)
+      VLeaf e as ns st    -> VLeaf e (patchAttrs ads as) ns st
+      VText _             -> error "Can't node patch text"
+      VRawText _          -> error "Can't node patch text"
 patch (ReplaceText i n:rds) a = patch rds $ take i a <> [v] <> drop (i + 1) a
   where
     v = case a !! i of

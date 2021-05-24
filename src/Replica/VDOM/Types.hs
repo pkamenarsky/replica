@@ -20,8 +20,8 @@ newtype Namespace = Namespace { getNamespace :: T.Text } deriving (Eq, Ord, Show
 
 -- | Representation of the Document Object Model in Haskell.
 data VDOM
-  = VNode    !T.Text !Attrs !(Maybe Namespace) ![VDOM]
-  | VLeaf    !T.Text !Attrs !(Maybe Namespace)
+  = VNode    !T.Text !Attrs !(Maybe Namespace) A.Value ![VDOM]
+  | VLeaf    !T.Text !Attrs !(Maybe Namespace) A.Value
   | VText    !T.Text
   | VRawText !T.Text
 
@@ -34,18 +34,20 @@ instance A.ToJSON VDOM where
     [ "type" .= t "text"
     , "text" .= text
     ]
-  toJSON (VLeaf element attrs mNamespace) = A.object $
+  toJSON (VLeaf element attrs mNamespace value) = A.object $
     [ "type"      .= t "leaf"
     , "element"   .= element
     , "attrs"     .= attrs
     , "namespace" .= fmap getNamespace mNamespace
+    , "value"     .= value
     ]
-  toJSON (VNode element attrs mNamespace children) = A.object $
+  toJSON (VNode element attrs mNamespace value children) = A.object $
     [ "type"      .= t "node"
     , "element"   .= element
     , "attrs"     .= attrs
-    , "children"  .= children
     , "namespace" .= fmap getNamespace mNamespace
+    , "value"     .= value
+    , "children"  .= children
     ]
 
 data EventOptions = EventOptions
