@@ -1,18 +1,18 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.31.2.
+-- This file has been generated from package.yaml by hpack version 0.34.7.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 934c3c818dc54dc66c2f0d09adbc567a3dfdf1eb37bee17e74f6c89b5d672e8c
+-- hash: 6647d6e7a77855787d55d8f2f68734f6239e40517318b209c3703c373b79d6cc
 
 name:           replica
 version:        0.1.0.0
 synopsis:       Remote virtual DOM library
 description:    Please see the README on GitHub at <https://github.com/pkamenarsky/replica#readme>
 category:       Web
-homepage:       https://github.com/https://github.com/pkamenarsky/replica#readme
-bug-reports:    https://github.com/https://github.com/pkamenarsky/replica/issues
+homepage:       https://github.com/pkamenarsky/replica#readme
+bug-reports:    https://github.com/pkamenarsky/replica/issues
 author:         Philip Kamenarsky
 maintainer:     p.kamenarsky@gmail.com
 copyright:      2019 (c) Philip Kamenarsky
@@ -22,10 +22,12 @@ build-type:     Simple
 extra-source-files:
     README.md
     ChangeLog.md
+data-files:
+    js/dist/client.js
 
 source-repository head
   type: git
-  location: https://github.com/https://github.com/pkamenarsky/replica
+  location: https://github.com/pkamenarsky/replica
 
 library
   exposed-modules:
