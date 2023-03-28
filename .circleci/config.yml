@@ -11,6 +11,7 @@ jobs:
       - restore_cache:
           key: v1-cache-16.18-stack-work-{{checksum "stack.yaml"}}-{{checksum "package.yaml"}}
       - run: stack setup
+      - run: stack upgrade
       - run: stack install --test
       - save_cache:
           key: v1-cache-16.18-stack-work-{{checksum "stack.yaml"}}-{{checksum "package.yaml"}}
