@@ -179,7 +179,9 @@ websocketApp getInitial getSession step pendingConn = do
     r <- try $ go conn ctx chan cf Nothing initial session 0
 
     case r of
-      Left (SomeException e) -> sendCloseCode conn closeCodeInternalError (T.pack $ show e)
+      Left (SomeException e) -> do
+        traceIO $ show e
+        sendCloseCode conn closeCodeInternalError (T.pack $ show e)
       Right _ -> sendClose conn ("done" :: T.Text)
 
     killThread tid
