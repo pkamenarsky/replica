@@ -1,6 +1,6 @@
 name:                replica
 version:             0.1.0.0
-github:              https://github.com/pkamenarsky/replica
+github:              "pkamenarsky/replica"
 license:             BSD3
 author:              Philip Kamenarsky
 maintainer:          p.kamenarsky@gmail.com

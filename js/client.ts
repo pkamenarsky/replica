@@ -172,8 +172,6 @@ function getElementPath(el: Element): number[] | null {
     }
   }
 
-  path.shift();
-
   return path;
 }
 
@@ -456,13 +454,11 @@ const CLOSE_CODE_ABNORMAL_CLOSURE = 1006;
 const CLOSE_CODE_INTERNAL_ERROR = 1011;
 
 function connect() {
-  let root = document.createElement('div');
+  const root = document.body;
 
   const port = window.location.port ? window.location.port : (window.location.protocol === 'http:' ? 80 : 443);
   const wsProtocol = window.location.protocol === 'http:' ? 'ws:' : 'wss:';
   const ws = new WebSocket(wsProtocol + "//" + window.location.hostname + ":" + port);
-
-  document.body.appendChild(root);
 
   (window as any)['callCallback'] = (cbId: number, arg: any, queue: boolean) => {
     const msg = {
@@ -485,11 +481,7 @@ function connect() {
 
     switch (update.type) {
       case 'replace':
-        if (root !== null) {
-          document.body.removeChild(root);
-          root = document.createElement('div');
-          document.body.appendChild(root);
-        }
+	root.replaceChildren();
 
         for (const element of update.dom) {
           buildDOM(ws, element, null, root);
@@ -498,15 +490,13 @@ function connect() {
         break;
 
       case 'update':
-        if (root !== null) {
-          serverFrame = update.serverFrame;
-          clientFrame = update.clientFrame;
+        serverFrame = update.serverFrame;
+        clientFrame = update.clientFrame;
 
-          patch(ws, update.serverFrame, update.diff, root);
+        patch(ws, update.serverFrame, update.diff, root);
 
-          messageWasSent = false;
-          dequeueMessage(ws);
-        }
+        messageWasSent = false;
+        dequeueMessage(ws);
 
         break;
 
