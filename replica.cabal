@@ -3,8 +3,6 @@ cabal-version: 1.12
 -- This file has been generated from package.yaml by hpack version 0.35.1.
 --
 -- see: https://github.com/sol/hpack
---
--- hash: 7d1fdfad83a67793d35044b30a07c88fd207875ef77f118f4243f5ed901a49e5
 
 name:           replica
 version:        0.1.0.0
@@ -22,6 +20,8 @@ build-type:     Simple
 extra-source-files:
     README.md
     ChangeLog.md
+data-files:
+    js/dist/client.js
 
 source-repository head
   type: git
